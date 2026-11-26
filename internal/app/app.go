@@ -1248,7 +1248,7 @@ func (a *App) Start() error {
 	// VERIDIAN_API_RATE_LIMIT_* (défaut activé, 300/min IP + 600/min identité).
 	// Exempte health/version + flux HMAC Hub (signature + anti-replay + rafales
 	// cron reconcile). Cf. internal/http/middleware/veridian_rate_limit.go.
-	veridianRLConfig := middleware.LoadVeridianAPIRateLimitConfig()
+	veridianRLConfig := veridianRateLimitConfig(a.config)
 	handler = middleware.VeridianAPIRateLimitMiddleware(a.rateLimiter, veridianRLConfig, a.logger)(handler)
 	a.logger.WithField("rate_limit", veridianRLConfig.String()).
 		Info("Veridian global API rate limit middleware configured")

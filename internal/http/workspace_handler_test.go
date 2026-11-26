@@ -3378,3 +3378,37 @@ func TestWorkspaceHandler_IntegrationWrites_MapServiceValidationErrorTo400(t *te
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 }
+
+// Veridian (26/11, chasse sécu lot C) : la route publique de vérification d'invitation ne montre de l'espace que son
+// identité. Contrôle de FORME (aucune clé hors id, name, settings.logo_url), qui tient quel que soit le secret ajouté
+// demain à Workspace ; la recherche des valeurs sentinelles vit dans workspace_redaction_upstream39_test.go.
+func TestWorkspaceHandler_VerifyInvitationToken_IdentiteSeule(t *testing.T) {
+	handler, workspaceSvc, _, _, authSvc := setupTest(t)
+	authSvc.EXPECT().ValidateInvitationToken("tok").Return("inv-1", "ws1", "invite@example.com", nil)
+	workspaceSvc.EXPECT().GetInvitationByID(gomock.Any(), "inv-1").Return(&domain.WorkspaceInvitation{
+		ID: "inv-1", WorkspaceID: "ws1", Email: "invite@example.com", ExpiresAt: time.Now().Add(time.Hour),
+	}, nil)
+	ws := workspaceWithLiveCredentials("ws1")
+	ws.Settings.LogoURL = "https://exemple.test/l.png"
+	workspaceSvc.EXPECT().GetWorkspace(gomock.Any(), "ws1").Return(ws, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces.verifyInvitationToken", strings.NewReader(`{"token":"tok"}`))
+	w := httptest.NewRecorder()
+	handler.handleVerifyInvitationToken(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp struct {
+		Valid      bool                       `json:"valid"`
+		Invitation map[string]interface{}     `json:"invitation"`
+		Workspace  map[string]json.RawMessage `json:"workspace"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.True(t, resp.Valid)
+	assert.Equal(t, "invite@example.com", resp.Invitation["email"])
+	keys := []string{}
+	for k := range resp.Workspace {
+		keys = append(keys, k)
+	}
+	assert.ElementsMatch(t, []string{"id", "name", "settings"}, keys)
+	assert.JSONEq(t, `{"logo_url":"https://exemple.test/l.png"}`, string(resp.Workspace["settings"]))
+}

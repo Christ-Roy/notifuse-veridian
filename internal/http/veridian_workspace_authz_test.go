@@ -171,3 +171,35 @@ func TestVeridianWorkspaceAuthzRoutesAreMounted(t *testing.T) {
 		assert.Equal(t, route, pattern)
 	}
 }
+
+// Faille du 26/11 (chasse sécu, lot B) : la query autorisait un espace, le corps en désignait un autre, le handler agissait
+// sur celui du corps. L'appelant est propriétaire de « own » seulement.
+func TestVeridianWorkspaceAuthz_QueryBodyMismatch(t *testing.T) {
+	for _, c := range [][3]string{
+		{"POST", "/api/webhookSubscriptions.create?workspace_id=own", `{"workspace_id":"victim","name":"x","url":"https://a.example/h"}`},
+		{"POST", "/api/segments.rebuild?workspace_id=own", `{"workspace_id":"victim","segment_id":"s"}`},
+		{"POST", "/api/tasks.delete?workspace_id=own", `{"workspace_id":"victim","id":"t"}`},
+		{"GET", "/api/webhookSubscriptions.list?workspace_id=own&workspace_id=victim", ""},
+	} {
+		f := &fakeAuthz{user: &domain.User{ID: "o", Type: domain.UserTypeUser}, uw: &domain.UserWorkspace{Role: "owner"}}
+		rec, reached := runAuthz(t, f, c[0], c[1], c[2])
+		assert.Equal(t, http.StatusBadRequest, rec.Code, c[1])
+		assert.False(t, *reached, c[1])
+		assert.Empty(t, f.seen, "aucune autorisation ne doit être tentée sur une requête ambiguë : %s", c[1])
+	}
+	t.Run("même espace dans la query et le corps : accepté", func(t *testing.T) {
+		f := &fakeAuthz{user: &domain.User{ID: "o", Type: domain.UserTypeUser}, uw: &domain.UserWorkspace{Role: "owner"}}
+		rec, reached := runAuthz(t, f, "POST", "/api/segments.rebuild?workspace_id=own", `{"workspace_id":"own","segment_id":"s"}`)
+		assert.Equal(t, 200, rec.Code)
+		assert.True(t, *reached)
+		assert.Equal(t, []string{"own"}, f.seen)
+	})
+}
+
+func TestVeridianAuthzWorkspaceID_CorpsTropGrosRefuse(t *testing.T) {
+	f := &fakeAuthz{user: &domain.User{ID: "o", Type: domain.UserTypeUser}, uw: &domain.UserWorkspace{Role: "owner"}}
+	big := `{"workspace_id":"own","pad":"` + strings.Repeat("a", veridianAuthzMaxBody) + `"}`
+	rec, reached := runAuthz(t, f, "POST", "/api/segments.rebuild", big)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
+	assert.False(t, *reached)
+}

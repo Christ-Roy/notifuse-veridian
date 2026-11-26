@@ -73,3 +73,11 @@ l'ancien drawer). Les e2e du dépôt mockent l'API ; la relecture réelle par AP
 
 Trou constate : aucune trace de requete (ni app, ni Traefik), donc impossible de dater un abus. Le middleware veridian_access_log.go emet une ligne JSON par requete /api/* sur stdout (message veridian_access) : method, route (sans query), workspace_req (query ou workspace_id du corps), token_type (jwt_user, api_key, hmac, none), token_user_id (opaque), token_workspace (cles API), status, duration_ms. Jamais corps, query, en-tetes, jeton, cle, e-mail. LogQL : obs logs notifuse --regex veridian_access. Exposition avant le 19/10 : routes sans controle depuis leur creation amont (webhooks 2025-10-02, segments 2025-10-04), aucun journal pour trancher ; DB : 1 webhook (robertbrunon, 04/08, Tunnel CRM Robert), segments uniquement chez alliancequalipro 8, animalsd 6, avsemonetique 9, arnaudcapitaine07 1.
 Toute enveloppe de la reponse (ce journal, les traces) relaie `Flush` et expose `Unwrap` : sans cela, le flux SSE de la boite unifiee (`/api/veridian/mail.events`) repondait 500 « flux non pris en charge » du 19/10 au 19/11/2026 (bandeau console « Live updates paused, reconnecting… » permanent). Le gestionnaire SSE cherche le vidage a travers les enveloppes (`flusherOf`). Tests : `TestVeridianAccessLog_LaisseVider`, `TestAccessLogWS_Unwrap`, `TestFlusherOf_TraverseLesEnveloppes`.
+
+## Un seul workspace_id par requête (26/11/2026, chasse sécu lot B)
+
+Le garde lisait la query et, si elle était présente, ignorait le corps ; les handlers POST lisent le corps.
+`POST /api/webhookSubscriptions.create?workspace_id=MIEN` + `{"workspace_id":"VICTIME"}` passait le garde sur MIEN et créait
+le webhook chez VICTIME (mêmes routes : segments, tâches). `veridianAuthzWorkspaceID` lit la query (toutes ses valeurs) ET le
+corps : deux valeurs distinctes = 400, corps au-delà de 4 Mo = 413 (plus de corps tronqué en silence).
+Test : `TestVeridianWorkspaceAuthz_QueryBodyMismatch`.

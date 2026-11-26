@@ -132,3 +132,19 @@ func TestVeridianRedactWorkspacesForAPI_DoesNotAliasInputSlice(t *testing.T) {
 	redacted[0].ID = "changed"
 	assert.Equal(t, "one", original[0].ID)
 }
+
+// La route publique d'invitation ne montre que l'identité de l'espace : ni réglage, ni intégration (faille du 26/11).
+func TestVeridianInvitationWorkspace_NeRendQueLIdentite(t *testing.T) {
+	ws := workspaceWithLiveCredentials("ws1")
+	ws.Settings.LogoURL = "https://exemple.test/logo.png"
+	raw, err := json.Marshal(veridianInvitationWorkspace(ws))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(raw), `{"id":"ws1","name":"Acme","settings":{"logo_url":"https://exemple.test/logo.png"}}`; got != want {
+		t.Fatalf("réponse publique : %s, attendu %s", got, want)
+	}
+	if veridianInvitationWorkspace(nil) != nil {
+		t.Fatal("un espace absent ne doit rien rendre")
+	}
+}

@@ -127,7 +127,6 @@ func TestWorkspaceHandlerRedactsCredentials(t *testing.T) {
 // likely to be thought of, because it is not reached from the console's own
 // settings screens.
 func TestVerifyInvitationTokenRedactsCredentials(t *testing.T) {
-	t.Skip("écart upstream v39.1 non analysé : comportement du fork différent ou fonctionnalité absente (voir docs/claude/75)")
 	handler, workspaceSvc, _, _, authSvc := setupTest(t)
 
 	const invitationID, workspaceID, email = "inv-1", "ws1", "invited@example.com"
@@ -168,11 +167,13 @@ func TestVerifyInvitationTokenRedactsCredentials(t *testing.T) {
 // A guard against the fixture rotting: if the workspace stops carrying the
 // sentinels, every assertion above passes while proving nothing.
 func TestRedactionFixtureActuallyCarriesCredentials(t *testing.T) {
-	t.Skip("écart upstream v39.1 non analysé : comportement du fork différent ou fonctionnalité absente (voir docs/claude/75)")
 	raw, err := json.Marshal(workspaceWithLiveCredentials("ws1"))
 	require.NoError(t, err)
 
 	for _, secret := range allRedactionSentinels() {
+		if secret == redactSMTPPassword {
+			continue // SMTPSettings.MarshalJSON ne sérialise jamais le mot de passe en clair : défense déjà en amont
+		}
 		require.Contains(t, string(raw), secret,
 			"the fixture no longer carries %s, so the redaction tests are vacuous", secret)
 	}

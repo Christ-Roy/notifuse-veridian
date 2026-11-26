@@ -71,23 +71,8 @@ func VeridianWorkspaceAuthzMiddleware(auth VeridianWorkspaceAuthzDeps, getJWTSec
 	return func(next http.Handler) http.Handler {
 		guard := requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			level := VeridianWorkspaceAuthzRoutes[r.URL.Path]
-			wsID := r.URL.Query().Get("workspace_id")
-			if wsID == "" && r.Body != nil {
-				body, err := io.ReadAll(io.LimitReader(r.Body, 4<<20))
-				_ = r.Body.Close()
-				if err != nil {
-					WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
-					return
-				}
-				r.Body = io.NopCloser(bytes.NewReader(body))
-				var probe struct {
-					WorkspaceID string `json:"workspace_id"`
-				}
-				_ = json.Unmarshal(body, &probe)
-				wsID = probe.WorkspaceID
-			}
-			if wsID == "" {
-				WriteJSONError(w, "workspace_id is required", http.StatusBadRequest)
+			wsID, ok := veridianAuthzWorkspaceID(w, r)
+			if !ok {
 				return
 			}
 			_, user, uw, err := auth.AuthenticateUserForWorkspace(r.Context(), wsID)
@@ -110,3 +95,46 @@ func VeridianWorkspaceAuthzMiddleware(auth VeridianWorkspaceAuthzDeps, getJWTSec
 		})
 	}
 }
+
+// veridianAuthzWorkspaceID rend l'UNIQUE workspace_id de la requête, lu dans la query ET dans le corps JSON.
+// Faille du 26/11 (chasse sécu, lot B) : seule la query était lue quand elle était présente, alors que les handlers
+// POST lisent le corps. `?workspace_id=MIEN` + corps `{"workspace_id":"VICTIME"}` passait le garde sur MIEN et
+// agissait sur VICTIME (webhook créé chez un autre client). Deux valeurs distinctes, où qu'elles soient : 400.
+func veridianAuthzWorkspaceID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	ids := map[string]bool{}
+	for _, v := range r.URL.Query()["workspace_id"] {
+		ids[v] = true
+	}
+	if r.Body != nil {
+		body, err := io.ReadAll(io.LimitReader(r.Body, veridianAuthzMaxBody+1))
+		_ = r.Body.Close()
+		if err != nil {
+			WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
+			return "", false
+		}
+		if len(body) > veridianAuthzMaxBody {
+			WriteJSONError(w, "Request body too large", http.StatusRequestEntityTooLarge)
+			return "", false
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		var probe struct {
+			WorkspaceID string `json:"workspace_id"`
+		}
+		if json.Unmarshal(body, &probe) == nil {
+			ids[probe.WorkspaceID] = true
+		}
+	}
+	delete(ids, "")
+	if len(ids) > 1 {
+		WriteJSONError(w, "workspace_id differs between query and body", http.StatusBadRequest)
+		return "", false
+	}
+	for id := range ids {
+		return id, true
+	}
+	WriteJSONError(w, "workspace_id is required", http.StatusBadRequest)
+	return "", false
+}
+
+// veridianAuthzMaxBody : au-delà, refus net plutôt qu'un corps tronqué passé en silence au handler.
+const veridianAuthzMaxBody = 4 << 20

@@ -128,3 +128,14 @@ func veridianRedactWorkspacesForAPI(workspaces []*domain.Workspace) []*domain.Wo
 	}
 	return result
 }
+
+// veridianInvitationWorkspace : ce que la route PUBLIQUE workspaces.verifyInvitationToken montre de l'espace qui invite.
+// Faille du 26/11 (chasse sécu, lot C) : elle rendait le Workspace entier, sans redaction, à tout porteur d'un jeton
+// d'invitation (clés LLM, Firecrawl, fournisseurs d'envoi, secret du stockage de fichiers). L'invité n'a besoin que du
+// nom (seul champ lu par AcceptInvitationPage) : rien d'autre ne sort, ni réglage, ni intégration.
+func veridianInvitationWorkspace(ws *domain.Workspace) map[string]interface{} {
+	if ws == nil {
+		return nil
+	}
+	return map[string]interface{}{"id": ws.ID, "name": ws.Name, "settings": map[string]interface{}{"logo_url": ws.Settings.LogoURL}}
+}

@@ -3,15 +3,10 @@ package organisation
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
-	"time"
 
 	"github.com/Notifuse/notifuse/internal/http/middleware"
 	"github.com/Notifuse/notifuse/internal/repository"
@@ -66,16 +61,12 @@ func syncMember(mux http.Handler, secret string) func(context.Context, string, M
 		if err != nil {
 			return err
 		}
-		ts := strconv.FormatInt(time.Now().UnixMilli(), 10)
-		mac := hmac.New(sha256.New, []byte(secret))
-		mac.Write([]byte(ts + "." + string(body)))
 		r, err := http.NewRequestWithContext(ctx, http.MethodPost, "/api/tenants/"+url.PathEscape(ws)+"/sync-member", bytes.NewReader(body))
 		if err != nil {
 			return err
 		}
 		r.Header.Set("Content-Type", "application/json")
-		r.Header.Set("X-Veridian-Timestamp", ts)
-		r.Header.Set("X-Veridian-Hub-Signature", hex.EncodeToString(mac.Sum(nil)))
+		middleware.SignVeridianHubRequest(r, secret, body) // v2 : liée à la méthode et au chemin (26/11)
 		rec := &statusOnly{header: http.Header{}, code: http.StatusOK}
 		mux.ServeHTTP(rec, r)
 		if rec.code >= 300 {

@@ -759,7 +759,7 @@ func (h *WorkspaceHandler) handleVerifyInvitationToken(w http.ResponseWriter, r 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":     "success",
 		"invitation": invitation,
-		"workspace":  workspace,
+		"workspace":  veridianInvitationWorkspace(workspace),
 		"valid":      true,
 	})
 }

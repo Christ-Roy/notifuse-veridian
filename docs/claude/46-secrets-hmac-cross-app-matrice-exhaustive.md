@@ -143,3 +143,24 @@ pour la créer en miroir.
 ---
 - **Corrigé le 24/11/2026** : une route `/api/*` inconnue, ou appelée avec la mauvaise méthode, répond 404 JSON `route_not_found`
   (`internal/veridian/apinotfound`), plus jamais 200 avec un corps vide. `/api/` et `/api/health` gardent leur 200.
+
+## Signature v2 du Hub vers Notifuse (26/11/2026, chasse sécu lot A)
+
+**Faille** : la v1 signe `"<ts>.<corps>"`, sans méthode, chemin, query ni tenant, et sans anti-rejeu. Une signature captée
+(journal, proxy, dump) se rejoue pendant 5 min sur une autre route ou un autre tenant : un GET signé (corps vide) vaut pour
+`DELETE /api/tenants/{id}` ou `/soft-delete` de n'importe quel client, un corps `{"reason":…}` vaut pour `/purge` ou
+`/rotate-api-key` (qui rend la clé), un `issue-magic-link` capté redonne un lien de connexion.
+
+**v2**, acceptée par Notifuse depuis le 26/11 à côté de la v1 (`internal/http/middleware/veridian_hmac.go`, seule définition) :
+
+    X-Veridian-Sig-Version: 2
+    X-Veridian-Timestamp:   <unix ms>
+    X-Veridian-Hub-Signature: hex(HMAC-SHA256(secret, ts + "\n" + METHODE + "\n" + chemin + "\n" + query + "\n" + hex(sha256(corps))))
+
+- `chemin` = le chemin ENCODÉ tel qu'envoyé (`/api/tenants/ab%2Fc/status`), `query` = la chaîne brute après `?`, sans le `?`,
+  vide sinon. `METHODE` en majuscules. Corps vide : `sha256("")`.
+- Une signature v2 ne sert qu'une fois par instance (cache 10 min). Un nouvel essai = un nouveau `ts`, donc une nouvelle signature.
+- Signeur Go : `middleware.SignVeridianHubRequest(r, secret, body)` (utilisé par `organisation.syncMember`).
+- **Bascule** : quand le Hub signe tout en v2, poser `VERIDIAN_HMAC_REQUIRE_V2=true` dans `deploy/notifuse.nomad.hcl` : la v1
+  est alors refusée (401). Tant que la variable est absente, rien ne change pour les appelants v1.
+- L'exemption du rate-limit global (fiche 44) vérifie la signature (v1 ou v2) sans la consommer.

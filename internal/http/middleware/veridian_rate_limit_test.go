@@ -1,13 +1,20 @@
 package middleware
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/ratelimiter"
@@ -26,16 +33,32 @@ func okHandler(hits *int) http.Handler {
 	})
 }
 
-// makeBearer forge un JWT non signé (header.payload.sig) portant un user_id.
-// Le middleware ne valide PAS la signature, seul le payload compte.
+// rlJWTSecret : la clé des jetons de test ; makeBearer signe avec elle (le seau par identité ne croit qu'un jeton
+// signé, 26/11).
+var rlJWTSecret = []byte("cle-jwt-de-test")
+
 func makeBearer(t *testing.T, userID string) string {
+	t.Helper()
+	tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"user_id": userID, "type": "user"}).SignedString(rlJWTSecret)
+	require.NoError(t, err)
+	return "Bearer " + tok
+}
+
+// forgedBearer : même forme, signature fausse (ce qu'un attaquant fabrique au nom d'une victime).
+func forgedBearer(t *testing.T, userID string) string {
 	t.Helper()
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
 	payloadBytes, err := json.Marshal(map[string]string{"user_id": userID, "type": "user"})
 	require.NoError(t, err)
-	payload := base64.RawURLEncoding.EncodeToString(payloadBytes)
-	sig := base64.RawURLEncoding.EncodeToString([]byte("fake-signature"))
-	return "Bearer " + header + "." + payload + "." + sig
+	return "Bearer " + header + "." + base64.RawURLEncoding.EncodeToString(payloadBytes) + "." + base64.RawURLEncoding.EncodeToString([]byte("fake"))
+}
+
+func signHub(req *http.Request, body string) {
+	ts := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	mac := hmac.New(sha256.New, []byte(testHubSecret))
+	mac.Write([]byte(ts + "." + body))
+	req.Header.Set("X-Veridian-Timestamp", ts)
+	req.Header.Set("X-Veridian-Hub-Signature", hex.EncodeToString(mac.Sum(nil)))
 }
 
 // newTestMiddleware construit le middleware avec une config explicite + un
@@ -126,6 +149,7 @@ func TestVeridianAPIRateLimit_PerIdentity_Distinct(t *testing.T) {
 		PerIP:       1000, // large pour isoler la dimension identité
 		PerIdentity: 2,
 		Window:      time.Minute,
+		JWTSecret:   rlJWTSecret,
 	}
 	h := newTestMiddleware(t, cfg, okHandler(nil))
 
@@ -167,17 +191,53 @@ func TestVeridianAPIRateLimit_ExemptPaths(t *testing.T) {
 // --- Exemption HMAC Hub : X-Veridian-Hub-Signature → jamais bloqué ---
 
 func TestVeridianAPIRateLimit_ExemptHMAC(t *testing.T) {
-	cfg := VeridianAPIRateLimitConfig{Enabled: true, PerIP: 1, PerIdentity: 1, Window: time.Minute}
-	h := newTestMiddleware(t, cfg, okHandler(nil))
+	cfg := VeridianAPIRateLimitConfig{Enabled: true, PerIP: 1, PerIdentity: 1, Window: time.Minute, HubSecret: testHubSecret}
+	var hits int
+	h := newTestMiddleware(t, cfg, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		require.Equal(t, `{"tenant_id":"t"}`, string(b), "le corps lu pour vérifier doit être rendu intact au handler")
+		hits++
+		w.WriteHeader(http.StatusOK)
+	}))
 
 	for i := 0; i < 5; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/api/users/by-email?email=a@b.com", nil)
+		body := `{"tenant_id":"t"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/tenants/status", strings.NewReader(body))
 		req.Header.Set("X-Forwarded-For", "6.6.6.6")
-		req.Header.Set("X-Veridian-Hub-Signature", "deadbeef")
+		signHub(req, body)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		require.Equal(t, http.StatusOK, rec.Code, "HMAC Hub req %d doit rester exempté", i)
 	}
+	assert.Equal(t, 5, hits)
+}
+
+// 26/11 : la seule PRÉSENCE de l'en-tête exemptait de toute limite.
+func TestVeridianAPIRateLimit_FakeSignatureHeaderStillLimited(t *testing.T) {
+	cfg := VeridianAPIRateLimitConfig{Enabled: true, PerIP: 2, PerIdentity: 100, Window: time.Minute, HubSecret: testHubSecret}
+	h := newTestMiddleware(t, cfg, okHandler(nil))
+	codes := []int{}
+	for i := 0; i < 3; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/api/users/by-email?email=a@b.com", nil)
+		req.Header.Set("X-Forwarded-For", "6.6.6.7")
+		req.Header.Set("X-Veridian-Hub-Signature", "deadbeef")
+		req.Header.Set("X-Veridian-Timestamp", strconv.FormatInt(time.Now().UnixMilli(), 10))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		codes = append(codes, rec.Code)
+	}
+	assert.Equal(t, []int{200, 200, http.StatusTooManyRequests}, codes)
+}
+
+// 26/11 : un jeton forgé au nom d'une victime ne doit pas vider le seau de la victime.
+func TestVeridianAPIRateLimit_IdentityNotTakenFromUnverifiedJWT(t *testing.T) {
+	cfg := VeridianAPIRateLimitConfig{Enabled: true, PerIP: 1000, PerIdentity: 2, Window: time.Minute, JWTSecret: rlJWTSecret}
+	h := newTestMiddleware(t, cfg, okHandler(nil))
+	for i := 0; i < 5; i++ {
+		doReq(t, h, http.MethodPost, "/api/contacts.list", "7.7.7.7", forgedBearer(t, "victime"))
+	}
+	assert.Equal(t, http.StatusOK, doReq(t, h, http.MethodPost, "/api/contacts.list", "8.8.8.1", makeBearer(t, "victime")).Code,
+		"la victime garde son seau intact")
 }
 
 // --- Non-API jamais inspecté (console, assets, /subscribe, /health racine) ---
@@ -238,6 +298,10 @@ func TestVeridianAPIRateLimit_NoIdentity_IPOnly(t *testing.T) {
 // --- Extraction user_id depuis Bearer (best-effort, sans validation) ---
 
 func TestVeridianUserIDFromBearer(t *testing.T) {
+	expired, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"user_id": "u3", "exp": time.Now().Add(-time.Hour).Unix()}).SignedString(rlJWTSecret)
+	require.NoError(t, err)
+	none, err := jwt.NewWithClaims(jwt.SigningMethodNone, jwt.MapClaims{"user_id": "u4"}).SignedString(jwt.UnsafeAllowNoneSignatureType)
+	require.NoError(t, err)
 	tests := []struct {
 		name string
 		hdr  string
@@ -247,44 +311,27 @@ func TestVeridianUserIDFromBearer(t *testing.T) {
 		{"not bearer", "Basic abc", ""},
 		{"malformed jwt 2 segments", "Bearer aaa.bbb", ""},
 		{"garbage payload", "Bearer aaa.!!!!.ccc", ""},
-		{"valid", makeBearerStr(t, "user-xyz"), "user-xyz"},
-		{"bearer case-insensitive", "bearer " + bearerToken(t, "u2"), "u2"},
+		{"signature fausse", forgedBearer(t, "user-xyz"), ""},
+		{"alg none", "Bearer " + none, ""},
+		{"expiré", "Bearer " + expired, ""},
+		{"valid", makeBearer(t, "user-xyz"), "user-xyz"},
+		{"bearer case-insensitive", "bearer " + strings.TrimPrefix(makeBearer(t, "u2"), "Bearer "), "u2"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, veridianUserIDFromBearer(tc.hdr))
+			assert.Equal(t, tc.want, veridianUserIDFromBearer(tc.hdr, rlJWTSecret))
 		})
 	}
+	assert.Equal(t, "", veridianUserIDFromBearer(makeBearer(t, "u5"), nil), "sans clé : aucune identité")
 }
 
-func bearerToken(t *testing.T, uid string) string {
-	t.Helper()
-	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256"}`))
-	pb, _ := json.Marshal(map[string]string{"user_id": uid})
-	payload := base64.RawURLEncoding.EncodeToString(pb)
-	return header + "." + payload + ".sig"
-}
-
-func makeBearerStr(t *testing.T, uid string) string {
-	t.Helper()
-	return "Bearer " + bearerToken(t, uid)
-}
-
-// --- Identité HMAC app caller (sans header Hub-Signature) ---
-
-func TestVeridianRateLimitIdentity_App(t *testing.T) {
+// x-veridian-app n'ouvre plus de seau : aucun appelant entrant ne le pose, il était forgeable (26/11).
+func TestVeridianRateLimitIdentity(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/foo?workspace_id=ws-1", nil)
 	req.Header.Set("x-veridian-app", "prospection")
-	assert.Equal(t, "app:prospection:ws-1", veridianRateLimitIdentity(req))
-
-	// Sans workspace.
-	req2 := httptest.NewRequest(http.MethodPost, "/api/foo", nil)
-	req2.Header.Set("x-veridian-app", "cms")
-	assert.Equal(t, "app:cms:", veridianRateLimitIdentity(req2))
-
-	// Rien.
-	req3 := httptest.NewRequest(http.MethodGet, "/api/foo", nil)
-	assert.Equal(t, "", veridianRateLimitIdentity(req3))
+	assert.Equal(t, "", veridianRateLimitIdentity(req, rlJWTSecret))
+	req.Header.Set("Authorization", makeBearer(t, "u1"))
+	assert.Equal(t, "user:u1", veridianRateLimitIdentity(req, rlJWTSecret))
 }
 
 // --- Extraction IP : XFF premier hop > X-Real-IP > RemoteAddr ---

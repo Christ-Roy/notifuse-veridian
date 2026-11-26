@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/ratelimiter"
@@ -102,8 +103,12 @@ func isVeridianRateLimitExemptPath(path string) bool {
 // la signature inbound. Ces requêtes sont exemptées : déjà protégées par
 // signature + anti-replay, et le cron reconcile Hub fait des rafales légitimes.
 // (Header lu via r.Header.Get → insensible à la casse.)
-func isVeridianHMACRequest(r *http.Request) bool {
-	return r.Header.Get("X-Veridian-Hub-Signature") != ""
+// La signature est VÉRIFIÉE (26/11) : un en-tête bidon ne sort plus de la limite.
+func isVeridianHMACRequest(r *http.Request, hubSecret string) bool {
+	if hubSecret == "" || r.Header.Get("X-Veridian-Hub-Signature") == "" {
+		return false
+	}
+	return veridianHubSignatureValid(r, hubSecret)
 }
 
 // VeridianAPIRateLimitConfig porte les seuils résolus depuis l'ENV. Exposée
@@ -114,6 +119,11 @@ type VeridianAPIRateLimitConfig struct {
 	PerIP       int
 	PerIdentity int
 	Window      time.Duration
+	// HubSecret : HUB_API_SECRET, pour vérifier la signature avant d'exempter. Vide : aucune exemption HMAC.
+	HubSecret string
+	// JWTSecret : la clé des JWT de l'app. Le seau par identité ne se remplit que pour un jeton dont la signature est
+	// vérifiée ; vide : dimension IP seule.
+	JWTSecret []byte
 }
 
 // LoadVeridianAPIRateLimitConfig lit la config depuis l'environnement avec des
@@ -192,7 +202,7 @@ func VeridianAPIRateLimitMiddleware(rl *ratelimiter.RateLimiter, cfg VeridianAPI
 
 			// Exemptions : observabilité + flux HMAC Hub (déjà protégé +
 			// rafales cron reconcile légitimes).
-			if isVeridianRateLimitExemptPath(path) || isVeridianHMACRequest(r) {
+			if isVeridianRateLimitExemptPath(path) || isVeridianHMACRequest(r, cfg.HubSecret) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -213,7 +223,7 @@ func VeridianAPIRateLimitMiddleware(rl *ratelimiter.RateLimiter, cfg VeridianAPI
 
 			// Dimension identité (best-effort). Si aucune identité extractible,
 			// on ne consomme pas de quota identité (la dimension IP suffit).
-			if identity := veridianRateLimitIdentity(r); identity != "" {
+			if identity := veridianRateLimitIdentity(r, cfg.JWTSecret); identity != "" {
 				if !rl.Allow(veridianRateLimitNamespaceIdentity, identity) {
 					retryAfter := rl.GetRemainingWindow(veridianRateLimitNamespaceIdentity, identity)
 					veridianWriteRateLimited(w, retryAfter)
@@ -263,68 +273,35 @@ func veridianRateLimitClientIP(r *http.Request) string {
 	return ip
 }
 
-// veridianRateLimitIdentity extrait une CLÉ d'identité best-effort pour le
-// rate-limit, sans valider la signature (la vraie auth tourne plus loin). Ordre :
-//
-//  1. Bearer JWT → claim "user_id" (décodé du payload, NON vérifié). Clé
-//     "user:<id>". Suffisant comme clé de bucketing ; pas une frontière de sécu.
-//  2. HMAC app caller : header x-veridian-app (+ workspace via query/header).
-//     Clé "app:<app>:<workspace>". (Note : le flux HMAC Hub est déjà exempté en
-//     amont via X-Veridian-Hub-Signature ; ce cas couvre d'éventuels callers
-//     HMAC futurs sans ce header précis.)
-//
-// Retourne "" si rien d'exploitable → seule la dimension IP s'applique.
-func veridianRateLimitIdentity(r *http.Request) string {
-	if uid := veridianUserIDFromBearer(r.Header.Get("Authorization")); uid != "" {
+// veridianRateLimitIdentity rend la clé d'identité du seau par identité : "user:<id>" d'un JWT dont la signature est
+// VÉRIFIÉE, sinon "" (seule la dimension IP s'applique). 26/11 (chasse sécu, lot A) : le claim user_id était lu sans
+// vérifier la signature, un jeton forgé au nom d'une victime vidait SON seau (429 ciblé) ; et l'en-tête
+// x-veridian-app, qu'aucun appelant entrant ne pose (c'est un en-tête SORTANT vers le Hub), ouvrait un seau forgeable.
+func veridianRateLimitIdentity(r *http.Request, jwtSecret []byte) string {
+	if uid := veridianUserIDFromBearer(r.Header.Get("Authorization"), jwtSecret); uid != "" {
 		return "user:" + uid
 	}
-
-	if app := strings.TrimSpace(r.Header.Get("x-veridian-app")); app != "" {
-		ws := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
-		if ws == "" {
-			ws = strings.TrimSpace(r.Header.Get("X-Workspace-Id"))
-		}
-		return "app:" + app + ":" + ws
-	}
-
 	return ""
 }
 
-// veridianUserIDFromBearer décode (sans vérifier) le payload d'un JWT "Bearer
-// xxx" et retourne son claim user_id. Best-effort : tout échec de parsing →
-// "". On ne fait PAS confiance à cette valeur pour l'auth — uniquement comme
-// clé de rate-limit (cf. doc du middleware).
-func veridianUserIDFromBearer(authHeader string) string {
-	authHeader = strings.TrimSpace(authHeader)
-	if authHeader == "" {
+// veridianUserIDFromBearer rend le claim user_id d'un "Bearer <jwt>" signé HS256 par jwtSecret, "" sinon (clé
+// absente, signature fausse, jeton expiré ou illisible). L'authentification elle-même tourne plus loin.
+func veridianUserIDFromBearer(authHeader string, jwtSecret []byte) string {
+	if len(jwtSecret) == 0 {
 		return ""
 	}
-	parts := strings.Fields(authHeader)
+	parts := strings.Fields(strings.TrimSpace(authHeader))
 	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
 		return ""
 	}
-
-	segments := strings.Split(parts[1], ".")
-	if len(segments) != 3 {
+	claims := jwt.MapClaims{}
+	tok, err := jwt.ParseWithClaims(parts[1], claims, func(*jwt.Token) (interface{}, error) { return jwtSecret, nil },
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+	if err != nil || !tok.Valid {
 		return ""
 	}
-
-	payload, err := base64.RawURLEncoding.DecodeString(segments[1])
-	if err != nil {
-		// Tolère un éventuel padding standard.
-		payload, err = base64.URLEncoding.DecodeString(segments[1])
-		if err != nil {
-			return ""
-		}
-	}
-
-	var claims struct {
-		UserID string `json:"user_id"`
-	}
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return ""
-	}
-	return strings.TrimSpace(claims.UserID)
+	uid, _ := claims["user_id"].(string)
+	return strings.TrimSpace(uid)
 }
 
 // veridianRateLimitConfigString : helper de log lisible au boot (non utilisé en

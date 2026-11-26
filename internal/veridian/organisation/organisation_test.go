@@ -24,6 +24,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/database"
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/http/middleware"
 	veridianmig "github.com/Notifuse/notifuse/internal/migrations/veridian"
 	"github.com/Notifuse/notifuse/internal/veridian/testpg"
 	"github.com/Notifuse/notifuse/pkg/logger"
@@ -354,20 +355,17 @@ func TestAbonnement(t *testing.T) {
 
 func TestSyncMember_RejoueLaRouteSignee(t *testing.T) {
 	var got map[string]any
-	var sig string
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/tenants/{id}/sync-member", func(w http.ResponseWriter, r *http.Request) {
+	// La signature est vérifiée par le VRAI middleware : v2 (liée à la méthode et au chemin, 26/11), usage unique.
+	mux.Handle("POST /api/tenants/{id}/sync-member", middleware.VeridianHMACMiddleware(secret)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw := new(bytes.Buffer)
 		_, _ = raw.ReadFrom(r.Body)
 		_ = json.Unmarshal(raw.Bytes(), &got)
-		mac := hmac.New(sha256.New, []byte(secret))
-		mac.Write([]byte(r.Header.Get("X-Veridian-Timestamp") + "." + raw.String()))
-		sig = hex.EncodeToString(mac.Sum(nil))
-		assert.Equal(t, sig, r.Header.Get("X-Veridian-Hub-Signature"))
+		assert.Equal(t, "2", r.Header.Get(middleware.VeridianSigVersionHeader))
 		if r.PathValue("id") != "alpha" {
 			w.WriteHeader(404)
 		}
-	})
+	})))
 	add := syncMember(mux, secret)
 	require.NoError(t, add(context.Background(), "alpha", Member{HubUserID: "h", Email: "a@x.test", Role: "owner"}))
 	assert.Equal(t, map[string]any{"email": "a@x.test", "hub_user_id": "h", "email_proven": false, "role": "member"}, got, "jamais un propriétaire par cette voie, jamais une attestation supposée")

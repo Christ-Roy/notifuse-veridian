@@ -16,3 +16,10 @@ les clés LLM/Firecrawl claires/chiffrées et tous les secrets EmailProvider.
   remise en service future exige un proxy S3 backend (dette P1), pas le retour du
   secret dans l'API.
 
+
+## La route publique d'invitation (26/11/2026, chasse sécu lot C)
+
+`POST /api/workspaces.verifyInvitationToken` (sans authentification) rendait le Workspace entier, sans redaction : clés LLM,
+Firecrawl, fournisseurs d'envoi, secret du stockage de fichiers, à tout porteur d'un jeton d'invitation. Elle ne rend plus
+que `{id, name, settings.logo_url}` (`veridianInvitationWorkspace`). Les deux tests upstream de cette route étaient
+neutralisés par `t.Skip` : réactivés (`TestVerifyInvitationTokenRedactsCredentials`, garde du jeu de test).

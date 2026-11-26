@@ -44,3 +44,12 @@ peuplé en prod. Fermé par un middleware GLOBAL en defense-in-depth.
 
 ---
 
+
+## Ne croire que ce qui est signé (26/11/2026, chasse sécu lot A)
+
+- L'exemption HMAC exigeait seulement la PRÉSENCE de `X-Veridian-Hub-Signature` : `X-Veridian-Hub-Signature: x` sortait
+  n'importe qui de toute limite. Elle vérifie désormais la signature (`veridianHubSignatureValid`, sans la consommer).
+- Le seau par identité lisait le `user_id` d'un JWT non vérifié : un jeton forgé au nom d'une victime vidait SON seau (429
+  ciblé). Seul un JWT HS256 signé par la clé de l'app ouvre un seau ; sinon, dimension IP seule. Le seau `x-veridian-app`
+  (en-tête qu'aucun appelant entrant ne pose) est retiré.
+- Les deux secrets arrivent par `internal/app/veridian_rate_limit_config.go` (une ligne d'`app.go`).
