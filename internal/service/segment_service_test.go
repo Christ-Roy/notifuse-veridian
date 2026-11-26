@@ -2,14 +2,18 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
+	"github.com/Notifuse/notifuse/internal/veridian/testpg"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
+	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1081,4 +1085,42 @@ func TestCalculateNext5AMInTimezone(t *testing.T) {
 		next5AMInUTC := next5AM.In(utcLoc)
 		assert.Equal(t, 5, next5AMInUTC.Hour())
 	})
+}
+
+// segments.contacts sur un VRAI PostgreSQL, table contact_segments telle que la crée la migration v8 (pas de created_at).
+// Mesuré en prod le 26/11/2026 (VER-129, export d'un segment par l'IA via le MCP du Hub) : « pq: column created_at does not
+// exist » à chaque appel ; les tests du service, sur une base simulée, passaient avec la requête cassée. Correctif repris de
+// l'upstream (6bfb136b). Cette épreuve échoue sur l'ancienne requête.
+func TestVeridianGetSegmentContacts_VraiPostgres(t *testing.T) {
+	db, err := sql.Open("postgres", testpg.DSN(t))
+	require.NoError(t, err)
+	defer db.Close()
+	db.SetMaxOpenConns(1) // la table temporaire vit dans une seule connexion
+	ctx := context.Background()
+	_, err = db.ExecContext(ctx, `CREATE TEMP TABLE contact_segments (
+		email VARCHAR(255) NOT NULL, segment_id VARCHAR(32) NOT NULL, version INTEGER NOT NULL,
+		matched_at TIMESTAMP WITH TIME ZONE NOT NULL, computed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (email, segment_id))`)
+	require.NoError(t, err)
+	base := time.Date(2026, 11, 26, 12, 0, 0, 0, time.UTC)
+	for i := 0; i < 5; i++ {
+		_, err = db.ExecContext(ctx, `INSERT INTO contact_segments (email, segment_id, version, matched_at) VALUES ($1, 'seg1', 1, $2)`,
+			fmt.Sprintf("c%d@exemple.fr", i), base.Add(time.Duration(i)*time.Minute))
+		require.NoError(t, err)
+	}
+	_, err = db.ExecContext(ctx, `INSERT INTO contact_segments (email, segment_id, version, matched_at) VALUES ('autre@exemple.fr', 'seg2', 1, now())`)
+	require.NoError(t, err)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	ws := mocks.NewMockWorkspaceRepository(ctrl)
+	ws.EXPECT().GetConnection(gomock.Any(), "w1").Return(db, nil).AnyTimes()
+	svc := NewSegmentService(mocks.NewMockSegmentRepository(ctrl), ws, mocks.NewMockTaskService(ctrl), pkgmocks.NewMockLogger(ctrl))
+
+	page1, err := svc.GetSegmentContacts(ctx, "w1", "seg1", 3, 0)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"c4@exemple.fr", "c3@exemple.fr", "c2@exemple.fr"}, page1, "les plus récents d'abord (matched_at)")
+	page2, err := svc.GetSegmentContacts(ctx, "w1", "seg1", 3, 3)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"c1@exemple.fr", "c0@exemple.fr"}, page2, "la pagination couvre tout le segment, sans doublon")
 }
