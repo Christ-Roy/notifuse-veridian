@@ -18,6 +18,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/veridian/imapgate"
 	"github.com/Notifuse/notifuse/internal/veridian/mailbox"
 	mailboxmodule "github.com/Notifuse/notifuse/internal/veridian/mailbox/module"
+	"github.com/Notifuse/notifuse/internal/veridian/mxauth"
 	"github.com/Notifuse/notifuse/internal/veridian/mxgate"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
 	"github.com/Notifuse/notifuse/internal/veridian/relayguard"
@@ -146,7 +147,7 @@ func wire(h platform.Host) error {
 	gh.RateLimiter().SetPolicy(mxgate.LimitIP, mxgate.PerIP, mxgate.LimitWindow)
 	server, err = mxgate.New(mxgate.Config{Hostname: set.Host, TLSConfig: tc, Directory: mxgate.NewProfiles(h.WorkspaceRepository(), set.Domains),
 		Ingest: mailbox.NewIngestor(mailboxmodule.NewStore(h.WorkspaceRepository()), h.Logger(), nil), Dispatch: h.IMAPPoller(),
-		Blocklist: &zen{check: relayguard.NewZEN(), cache: map[string]verdict{}}, Limiter: gh.RateLimiter(), Logger: h.Logger()})
+		Blocklist: &zen{check: relayguard.NewZEN(), cache: map[string]verdict{}}, Limiter: gh.RateLimiter(), Auth: mxauth.New(nil), Logger: h.Logger()})
 	return err
 }
 

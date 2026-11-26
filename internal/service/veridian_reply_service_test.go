@@ -624,3 +624,53 @@ func TestVeridianReply_Process_StatIncrementFailsButProcessingSucceeds(t *testin
 	err := m.svc.ProcessInboundMessage(context.Background(), msg)
 	require.NoError(t, err)
 }
+
+// Port 25 public : le repli « From = contact connu » exige le verdict d'authentification posé par le récepteur (mxauth). Un inconnu qui
+// usurpe l'adresse d'un contact ne le fait pas sortir de ses séquences ; le Message-ID cité reste valable sans condition.
+func mxMessage(verdict string) *domain.VeridianIMAPMessage {
+	return &domain.VeridianIMAPMessage{
+		WorkspaceID: replyWS, IntegrationID: "mx:p1",
+		From:    "Known <known@lead.fr>",
+		Subject: "une question",
+		RawBody: []byte("Return-Path: <x@evil.test>\r\nReceived: from [203.0.113.66] by mx.test\r\n" + verdict + "From: Known <known@lead.fr>\r\nSubject: une question\r\n\r\nbonjour\r\n"),
+	}
+}
+
+func TestVeridianReply_Detect_MXFallback_RequiresAuthentication(t *testing.T) {
+	for name, tc := range map[string]struct {
+		verdict string
+		reply   bool
+	}{
+		"usurpation, SPF fail et DMARC fail": {"Authentication-Results: mx.test; spf=fail smtp.mailfrom=lead.fr; dkim=none; dmarc=fail header.from=lead.fr\r\n", false},
+		"DNS en panne":                       {"Authentication-Results: mx.test; spf=temperror; dkim=none; dmarc=temperror header.from=lead.fr\r\n", false},
+		"aucun verdict":                      {"", false},
+		"DKIM aligné, DMARC pass":            {"Authentication-Results: mx.test; spf=none; dkim=pass header.d=lead.fr; dmarc=pass header.from=lead.fr\r\n", true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m, ctrl := newReplyTestMocks(t)
+			defer ctrl.Finish()
+			if tc.reply {
+				m.contactRepo.EXPECT().GetContactByEmail(gomock.Any(), replyWS, "known@lead.fr").Return(&domain.Contact{Email: "known@lead.fr"}, nil)
+			}
+			// Sans verdict favorable, aucun accès au contact : pas de GetContactByEmail attendu (gomock refuse l'appel imprévu).
+			det, err := m.svc.DetectReply(context.Background(), mxMessage(tc.verdict))
+			require.NoError(t, err)
+			assert.Equal(t, tc.reply, det.IsReply)
+			if tc.reply {
+				assert.Equal(t, domain.VeridianReplyMatchSenderFallback, det.MatchType)
+			}
+		})
+	}
+}
+
+func TestVeridianReply_Detect_MXMessageIDMatch_NeedsNoAuthentication(t *testing.T) {
+	m, ctrl := newReplyTestMocks(t)
+	defer ctrl.Finish()
+	msg := mxMessage("Authentication-Results: mx.test; spf=fail; dkim=none; dmarc=fail header.from=lead.fr\r\n")
+	msg.InReplyTo = "<sent-uuid-9@send.veridian.site>"
+	m.messageRepo.EXPECT().FindContactEmailByMessageID(gomock.Any(), replyWS, "sent-uuid-9").Return("known@lead.fr", true, nil)
+	det, err := m.svc.DetectReply(context.Background(), msg)
+	require.NoError(t, err)
+	assert.True(t, det.IsReply)
+	assert.Equal(t, domain.VeridianReplyMatchMessageID, det.MatchType)
+}

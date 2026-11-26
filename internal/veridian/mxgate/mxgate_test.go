@@ -1,7 +1,11 @@
 package mxgate
 
 import (
+	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -13,7 +17,9 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/veridian/mailbox"
+	"github.com/Notifuse/notifuse/internal/veridian/mxauth"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/emersion/go-msgauth/dkim"
 )
 
 type fake struct {
@@ -66,9 +72,37 @@ func ws(id string, profiles ...string) *domain.Workspace {
 	return w
 }
 
+// dns : un DNS de poche (aucune requête réseau). client.fr interdit toute IP au SPF et publie p=reject.
+type dns struct{ txt map[string][]string }
+
+func (d dns) LookupTXT(_ context.Context, name string) ([]string, error) {
+	if v, ok := d.txt[strings.ToLower(name)]; ok {
+		return v, nil
+	}
+	return nil, &net.DNSError{Err: "no such host", Name: name, IsNotFound: true}
+}
+func (dns) LookupMX(_ context.Context, name string) ([]*net.MX, error) {
+	return nil, &net.DNSError{Err: "no such host", Name: name, IsNotFound: true}
+}
+func (dns) LookupIPAddr(_ context.Context, name string) ([]net.IPAddr, error) {
+	return nil, &net.DNSError{Err: "no such host", Name: name, IsNotFound: true}
+}
+func (dns) LookupAddr(context.Context, string) ([]string, error) {
+	return nil, &net.DNSError{Err: "no such host", IsNotFound: true}
+}
+
+func zone() dns {
+	return dns{txt: map[string][]string{"client.fr": {"v=spf1 -all"}, "_dmarc.client.fr": {"v=DMARC1; p=reject"}}}
+}
+
 func start(t *testing.T, f *fake, l *lister) string {
 	t.Helper()
-	s, err := New(Config{Hostname: "mx.test", Directory: NewProfiles(l, []string{" Boite.fr "}), Ingest: f, Dispatch: f, Blocklist: f, Limiter: f, Logger: logger.NewLogger()})
+	return startAuth(t, f, l, mxauth.New(zone()))
+}
+
+func startAuth(t *testing.T, f *fake, l *lister, auth Authenticator) string {
+	t.Helper()
+	s, err := New(Config{Hostname: "mx.test", Directory: NewProfiles(l, []string{" Boite.fr "}), Ingest: f, Dispatch: f, Blocklist: f, Limiter: f, Auth: auth, Logger: logger.NewLogger()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,5 +224,69 @@ func TestMail_IPv6LimitedByPrefix(t *testing.T) {
 	}
 	if want := []string{"2a02:c207:1:2::/64", "2a02:c207:1:2::/64", "203.0.113.7"}; strings.Join(k.keys, " ") != strings.Join(want, " ") {
 		t.Fatalf("clés %v", k.keys)
+	}
+}
+
+// sendRaw dépose un message tel quel, depuis le 127.0.0.1 du test.
+func sendRaw(addr, mailFrom, to string, raw []byte) error {
+	c, err := smtp.Dial(addr)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	if err := c.Mail(mailFrom); err != nil {
+		return err
+	}
+	if err := c.Rcpt(to); err != nil {
+		return err
+	}
+	w, err := c.Data()
+	if err != nil {
+		return err
+	}
+	_, _ = w.Write(raw)
+	return w.Close()
+}
+
+const spoofBody = "To: jc@boite.fr\r\nSubject: Re: x\r\nDate: Wed, 26 Nov 2026 10:00:00 +0000\r\nMessage-Id: <r2@evil.test>\r\n\r\nJe me desinscris\r\n"
+
+// Le port 25 est public : un inconnu qui écrit « From: contact connu » ne déclenche pas le repli « From connu » ; le même mail
+// signé DKIM par le domaine du contact le déclenche. Le verdict est posé en tête, celui qu'un expéditeur y met est retiré.
+func TestReceive_AuthenticationResults(t *testing.T) {
+	forged := "Authentication-Results: mx.test; spf=pass smtp.mailfrom=client.fr; dmarc=pass header.from=client.fr\r\n"
+	f, l := &fake{}, &lister{ws: []*domain.Workspace{ws("gbc", "jc@boite.fr")}}
+	z := zone()
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	z.txt["s1._domainkey.client.fr"] = []string{"v=DKIM1; k=ed25519; p=" + base64.StdEncoding.EncodeToString(pub)}
+	addr := startAuth(t, f, l, mxauth.New(z))
+
+	// 1. Usurpation : faux verdict en prime, SPF fail, aucune signature.
+	if err := sendRaw(addr, "contact@client.fr", "jc@boite.fr", []byte(forged+"From: Contact <contact@client.fr>\r\n"+spoofBody)); err != nil {
+		t.Fatal(err)
+	}
+	got := string(f.raw)
+	if n := strings.Count(strings.ToLower(got), "authentication-results: mx.test"); n != 1 {
+		t.Fatalf("un seul verdict à notre nom attendu, %d : %q", n, got)
+	}
+	if strings.Contains(got, "dmarc=pass") || !strings.Contains(strings.ReplaceAll(got, "\r\n\t", " "), "spf=fail") || !strings.Contains(got, "dmarc=fail") {
+		t.Fatalf("verdict attendu spf=fail dmarc=fail, le faux est retiré : %q", got)
+	}
+	if !strings.HasPrefix(got, "Return-Path: <contact@client.fr>\r\nReceived: ") || mxauth.FallbackAllowed(f.msgs[0].RawBody) {
+		t.Fatalf("le verdict suit la trace, et le mail usurpé n'autorise pas le repli : %q", got)
+	}
+
+	// 2. Le même, signé DKIM par client.fr : DMARC passe, le repli est retenu.
+	var signed bytes.Buffer
+	if err := dkim.Sign(&signed, strings.NewReader("From: Contact <contact@client.fr>\r\n"+spoofBody), &dkim.SignOptions{Domain: "client.fr", Selector: "s1", Signer: priv}); err != nil {
+		t.Fatal(err)
+	}
+	if err := sendRaw(addr, "bounce@esp.test", "jc@boite.fr", signed.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.msgs) != 2 || !strings.Contains(string(f.raw), "dmarc=pass") || !mxauth.FallbackAllowed(f.msgs[1].RawBody) {
+		t.Fatalf("DKIM aligné : repli attendu : %q", f.raw)
 	}
 }

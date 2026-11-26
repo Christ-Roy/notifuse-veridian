@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/veridian/mxauth"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/Notifuse/notifuse/pkg/veridian_ndr"
 )
@@ -178,6 +179,11 @@ func (s *VeridianReplyService) DetectReply(ctx context.Context, msg *domain.Veri
 
 	// --- 2. FALLBACK FAIBLE : From = contact connu du workspace ---
 	if fromEmail == "" {
+		return none, nil
+	}
+	// Un mail reçu sur le port 25 public peut porter n'importe quel From : le repli n'est retenu que si le verdict posé par le
+	// récepteur (SPF, DKIM, DMARC, mxauth) le permet. Le match par Message-ID cité (ci-dessus) reste valable sans condition.
+	if mxauth.IsReceived(msg.IntegrationID) && !mxauth.FallbackAllowed(msg.RawBody) {
 		return none, nil
 	}
 	contact, err := s.contactRepo.GetContactByEmail(ctx, msg.WorkspaceID, fromEmail)

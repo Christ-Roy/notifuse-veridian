@@ -3,6 +3,7 @@ module github.com/Notifuse/notifuse
 go 1.26.11
 
 require (
+	blitiri.com.ar/go/spf v1.6.0
 	contrib.go.opencensus.io/exporter/aws v0.0.0-20230502192102-15967c811cec
 	contrib.go.opencensus.io/exporter/jaeger v0.2.1
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
@@ -19,6 +20,7 @@ require (
 	github.com/aws/aws-sdk-go v1.55.8
 	github.com/emersion/go-imap/v2 v2.0.0-beta.8
 	github.com/emersion/go-message v0.18.2
+	github.com/emersion/go-msgauth v0.7.0
 	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6
 	github.com/emersion/go-smtp v0.25.1
 	github.com/golang-jwt/jwt/v5 v5.3.1

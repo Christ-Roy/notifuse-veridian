@@ -57,9 +57,9 @@ de **Notifuse vers le relais** (chiffrés dans l'intégration, jamais montrés a
 | Rangement par adresse | `internal/veridian/mailbox/owner.go` (entrée + remise en ordre au démarrage) | aucun |
 | Vue client mail (dossiers, drapeaux par profil) | `internal/veridian/mailbox/boxview.go`, table `veridian_mail_box_flag` (V75) | aucun |
 | Accès | `internal/veridian/boxaccess`, table système `veridian_box_access` (V75), routes `mail.access.*`, CLI `mail:access*` | droit `workspace:write` |
-| IMAP | `internal/veridian/imapgate`, capacité `boites` | `VERIDIAN_IMAP_ENABLED`, `_PORT` (1993), `_PUBLIC_PORT`, `_BEHIND_TLS_PROXY`, `_PROXY_PROTOCOL`, `VERIDIAN_BOX_HOST` |
-| SMTP de boîte | `internal/veridian/boxsend`, par le bridge (71) : mot de passe de boîte = pas un jeton | `SMTP_BRIDGE_*` |
-| Récepteur | `internal/veridian/mxgate`, capacité `mx` | `VERIDIAN_MX_DOMAINS` (vide = éteint), `VERIDIAN_MX_HOST`, `_PORT` (2525), `_PROXY_PROTOCOL` |
+| IMAP | `internal/veridian/imapgate`, capacité `boites` | `VERIDIAN_IMAP_ENABLED`, `_PORT` (1993), `_PUBLIC_PORT`, `_BEHIND_TLS_PROXY`, `_PROXY_PROTOCOL`, `VERIDIAN_BOX_HOST`, `_MAX_CONNS_PER_IP`, `_TRUSTED_PROXIES` |
+| SMTP de boîte | `internal/veridian/boxsend`, par le bridge (71) : mot de passe de boîte = pas un jeton | `SMTP_BRIDGE_*`, `VERIDIAN_BOX_SMTP_MAX_CONNS_PER_IP`, `_TRUSTED_PROXIES` |
+| Récepteur | `internal/veridian/mxgate` + `mxauth`, capacité `mx` | `VERIDIAN_MX_DOMAINS` (vide = éteint), `VERIDIAN_MX_HOST`, `_PORT` (2525), `_PROXY_PROTOCOL`, `_MAX_CONNS_PER_IP`, `_TRUSTED_PROXIES` |
 
 - Dossiers : `INBOX` (réponses, autres), `Rejets` (rebonds, rapports), `Sent`, `Trash` (masqués). Rien n'est supprimé : purger la
   corbeille masque, l'API garde tout. UID = `seq`, jamais réattribué. Pas de `Drafts` : un dépôt est refusé, jamais avalé.
@@ -70,6 +70,29 @@ de **Notifuse vers le relais** (chiffrés dans l'intégration, jamais montrés a
   deux espaces : 451, jamais devinée. IP sur ZEN (PBL comprise) : refusée ; ZEN injoignable : on reçoit. `postmaster@` et `abuse@` servis.
 - Porte SMTP publique : `boxsend/gate.go` (PLAIN et LOGIN, essais par vraie adresse, 3 par connexion), PROXY v2 exigé.
 - Limites connues : pas de `Drafts`, Gmail « Envoyer en tant que » veut 465 ou 587.
+
+### Authentification du courrier entrant (26/11/2026, chasse D1)
+
+Le 25 est public : n'importe qui peut écrire « From: un de nos contacts ». Le repli faible de `veridian_reply_service.go` (« From
+connu » sans Message-ID cité) sortait alors le prospect de ses séquences. `mxauth` mesure à la réception, `mxgate.Data` pose :
+- **SPF** de l'IP réelle (PROXY v2) et du MAIL FROM (HELO si vide), **DKIM** de chaque signature (5 au plus), **alignement DMARC** sur le
+  domaine du From (politique du domaine, sinon du domaine organisationnel ; From absent, répété ou à plusieurs domaines : `permerror`).
+- En tête du message rangé, après `Return-Path` et `Received` : `Authentication-Results: <VERIDIAN_MX_HOST>; spf=…; dkim=…; dmarc=…`
+  (RFC 8601). Tout `Authentication-Results` de notre nom venu de l'expéditeur est retiré d'abord (`StripOwn`) : c'est un faux.
+- Repli « From connu » retenu seulement si DMARC `pass`, ou, sans politique publiée, SPF ou DKIM aligné `pass` (`mxauth.FallbackAllowed`,
+  appelé pour les seuls messages `mx:`). Le match par Message-ID cité reste valable sans condition. Mails lus en IMAP : inchangé.
+- DNS en panne : jamais de refus, `temperror`, le mail est rangé, le repli n'est pas retenu. Le DNS est injectable (`mxauth.Resolver`).
+- Piège : le verdict n'est lu qu'à sa place exacte (premier champ après la trace) ; ne rien insérer avant lui dans `Data`.
+
+### Plafonds des portes publiques (26/11/2026, chasse D2 à D5)
+
+- **Connexions par IP** : `imapgate.LimitListener` (IPv6 au /64, comme `LimitKey`) sur l'IMAP, le SMTP de boîte et le récepteur, défaut 20,
+  `VERIDIAN_{IMAP,BOX_SMTP,MX}_MAX_CONNS_PER_IP` (0 = aucune borne). Il compte l'adresse du client : sans `_PROXY_PROTOCOL` il compterait
+  l'entrée. `SEARCH BODY` lit par lots de 25 sans garder les messages.
+- **Sources du PROXY v2** : `VERIDIAN_{IMAP,BOX_SMTP,MX}_TRUSTED_PROXIES` (CIDR, virgules). Hors liste, la connexion est coupée avant lecture.
+  Liste vide = toutes les sources (avertissement au démarrage). Une adresse annoncée par un client direct sur le tailnet était crue.
+- **Essais** : un login réussi ne rend plus que la clé boîte + IP, pas le budget de l'IP. Borne globale du SMTP de boîte : seuls les échecs
+  comptent (6000 par minute), au-delà un échec est ralenti de 2 s, jamais un bon mot de passe refusé (la borne protège la base, pas le secret).
 
 - **Boîte personnelle (Gmail, Outlook, Orange... lue en entier) : réponses seulement, par défaut** (Robert, 24/11/2026). Seuls restent
   les réponses et rejets reliés à un de NOS envois par Message-ID ; le courrier privé n'est ni rangé ni affiché (`EffectiveScope`,

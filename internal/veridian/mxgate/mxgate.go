@@ -18,6 +18,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/veridian/boxaccess"
 	"github.com/Notifuse/notifuse/internal/veridian/mailbox"
+	"github.com/Notifuse/notifuse/internal/veridian/mxauth"
 	"github.com/Notifuse/notifuse/pkg/logger"
 	"github.com/emersion/go-smtp"
 )
@@ -31,7 +32,7 @@ const (
 	LimitWindow     = 10 * time.Minute
 	dataTimeout     = 60 * time.Second
 	// SourceID : boîte source portée par un mail reçu directement (pas d'intégration IMAP).
-	SourceID = "mx"
+	SourceID = mxauth.SourceID
 )
 
 // Target : la boîte qui possède une adresse.
@@ -73,6 +74,11 @@ type Limiter interface {
 	Allow(namespace, key string) bool
 }
 
+// Authenticator pose le verdict SPF, DKIM et DMARC d'un message reçu (internal/veridian/mxauth).
+type Authenticator interface {
+	Header(ctx context.Context, host string, in mxauth.Input) string
+}
+
 // Config du récepteur.
 type Config struct {
 	Addr      string
@@ -83,6 +89,7 @@ type Config struct {
 	Dispatch  Dispatcher
 	Blocklist Blocklist
 	Limiter   Limiter
+	Auth      Authenticator // nil : le DNS du système
 	Logger    logger.Logger
 }
 
@@ -96,6 +103,9 @@ type Server struct {
 func New(cfg Config) (*Server, error) {
 	if cfg.Directory == nil || cfg.Ingest == nil || cfg.Limiter == nil || cfg.Logger == nil || cfg.Hostname == "" {
 		return nil, errors.New("récepteur de courrier : dépendance manquante")
+	}
+	if cfg.Auth == nil {
+		cfg.Auth = mxauth.New(nil) // jamais de courrier rangé sans verdict d'authentification
 	}
 	s := &Server{cfg: cfg}
 	srv := smtp.NewServer(s)
@@ -136,12 +146,13 @@ func (s *Server) NewSession(c *smtp.Conn) (smtp.Session, error) {
 			ip = h
 		}
 	}
-	return &session{s: s, ip: ip}, nil
+	return &session{s: s, ip: ip, conn: c}, nil
 }
 
 type session struct {
 	s       *Server
 	ip      string
+	conn    *smtp.Conn
 	checked bool
 	from    string
 	started bool
@@ -197,7 +208,13 @@ func (c *session) Data(r io.Reader) error {
 		return refuse(554, 5, 5, 1, "aucun destinataire valide")
 	}
 	at := time.Now().UTC()
-	full := trace(c.ip, c.s.cfg.Hostname, c.from, at, raw)
+	// Le verdict SPF, DKIM, DMARC se pose sur le message reçu ; un Authentication-Results de notre nom venu de l'expéditeur est un faux.
+	helo := ""
+	if c.conn != nil {
+		helo = c.conn.Hostname()
+	}
+	verdict := c.s.cfg.Auth.Header(context.Background(), c.s.cfg.Hostname, mxauth.Input{IP: net.ParseIP(c.ip), Helo: helo, MailFrom: c.from, Raw: raw})
+	full := trace(c.ip, c.s.cfg.Hostname, c.from, at, append([]byte(verdict), mxauth.StripOwn(raw, c.s.cfg.Hostname)...))
 	ctx, cancel := context.WithTimeout(context.Background(), dataTimeout)
 	defer cancel()
 	// Une boîte en échec fait réessayer tout le message : les boîtes déjà servies dédoublonnent par Message-ID.
