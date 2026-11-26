@@ -16,9 +16,9 @@
 # un tag, tous validés par motif strict côté bastion (refus = code 64).
 #
 # Ce script tourne donc sur le runner GitHub et ne fait plus que trois appels :
-#   put-job <tier>          ← le HCL DU REPO, poussé sur stdin
+#   put-job <tier> <tag>         ← le HCL DU REPO, poussé sur stdin
 #   deploy  <tier> <tag>
-#   cleanup <tier>
+#   cleanup <tier> <tag>   (26/11 : matériel rangé par tag côté bastion, deux runs parallèles ne s'effacent plus)
 #
 # Le pré-pull authentifié de l'image ghcr sur le nœud cible, le `nomad job
 # validate`, le `plan`, le `run -detach -check-index` et le suivi du DeploymentID
@@ -77,7 +77,7 @@ ssh-keyscan -H "$NOMAD_BASTION_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 # choisi par le client : le bastion range le HCL lui-même, dans son propre
 # répertoire de travail à 0700.
 echo "== put-job ${ENV_TARGET} =="
-ssh "${SSH_OPTS[@]}" "$BASTION" "put-job ${ENV_TARGET}" < "$HCL"
+ssh "${SSH_OPTS[@]}" "$BASTION" "put-job ${ENV_TARGET} ${IMAGE_TAG}" < "$HCL"
 
 # ── deploy : pré-pull + validate + plan + run -check-index + suivi, côté bastion ─
 # -n : ce ssh ne doit pas consommer le stdin du step.
@@ -90,11 +90,11 @@ ssh -n "${SSH_OPTS[@]}" "$BASTION" "deploy ${ENV_TARGET} ${IMAGE_TAG}" | tee "$D
 # avec l'ANCIENNE version servie. L'état final annoncé par Nomad fait foi, pas le code de retour.
 if grep -qiE 'rolling back|Failed due to (progress deadline|unhealthy allocations)' "$DEPLOY_LOG"; then
   echo "✗ deploy $ENV_TARGET : Nomad a échoué et rétabli la version précédente" >&2
-  ssh -n "${SSH_OPTS[@]}" "$BASTION" "cleanup ${ENV_TARGET}" || true
+  ssh -n "${SSH_OPTS[@]}" "$BASTION" "cleanup ${ENV_TARGET} ${IMAGE_TAG}" || true
   exit 1
 fi
 
 # ── cleanup du matériel temporaire déposé sur le bastion ───────────────────────
-ssh -n "${SSH_OPTS[@]}" "$BASTION" "cleanup ${ENV_TARGET}" || true
+ssh -n "${SSH_OPTS[@]}" "$BASTION" "cleanup ${ENV_TARGET} ${IMAGE_TAG}" || true
 
 echo "✓ deploy $ENV_TARGET soumis et vérifié"
