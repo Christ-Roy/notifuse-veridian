@@ -125,6 +125,11 @@ func (s *veridianService) SyncMember(ctx context.Context, input domain.SyncMembe
 		}
 	}
 
+	// Retiree par le proprietaire de l'espace (fiche 95) : jamais remise toute seule.
+	if err := refuseIfGone(ctx, input.TenantID, input.HubUserID); err != nil {
+		return nil, err
+	}
+
 	// Pas membre → resolveur ctx caller owner pour AddUserToWorkspace upstream.
 	callerOwnerID, err := s.resolveWorkspaceCaller(ctx, input.TenantID)
 	if err != nil {
@@ -446,6 +451,10 @@ func (s *veridianService) RestoreMember(ctx context.Context, input domain.Restor
 		if !notAttached {
 			return nil, fmt.Errorf("lookup user workspace: %w", lookupErr)
 		}
+	}
+
+	if err := refuseIfGone(ctx, input.TenantID, input.HubUserID); err != nil {
+		return nil, err
 	}
 
 	// Step 4 : AddUserToWorkspace via owner caller ctx.

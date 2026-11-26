@@ -195,9 +195,17 @@ test.describe('Hub integration contract v1 — scenario 1-9 README', () => {
     expect(healthResumed.magic_link_capable).toBe(true);
 
     // ─── Step 7 : attach-owner (nouveau bob) ──────────────────────────
+    // Le geste TRANSFÈRE la propriété : sans le dire, refus, alice reste propriétaire (fiche 95).
+    const attachUnsaid = await hmacFetch('/api/veridian/admin/attach-owner', 'POST', {
+      tenant_id: tenantID,
+      owner_email: bobEmail,
+    });
+    expect(attachUnsaid.status).toBe(409);
+    expect((await attachUnsaid.json()).code).toBe('owner_exists');
     const attachBob = await hmacFetch('/api/veridian/admin/attach-owner', 'POST', {
       tenant_id: tenantID,
       owner_email: bobEmail,
+      transfer: true,
     });
     expect(attachBob.status).toBe(200);
     const bobAttach = await attachBob.json();

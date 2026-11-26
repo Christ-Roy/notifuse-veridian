@@ -63,6 +63,12 @@ USAGE — survol (détail : notifuse <cmd> --help, ou SKILL.md)
   notifuse segments:list|get|create|delete|contacts|rebuild <ws> ...
   notifuse events:list|get|upsert <ws> ...   (customEvents : champs top-level, external_id requis)
   notifuse members:list|invite|remove|permissions <ws> ...   (Team Settings, owner)
+  notifuse-admin workspace-admins:grant|revoke <ws> --hub-user-id UUID --reason R --actor-hub-user-id UUID [--reinstate (grant)] [--yes]
+                                          rôle d'espace « admin » (tous les droits d'un propriétaire, sauf supprimer l'espace, transférer la
+                                          propriété, retirer un propriétaire). HMAC Hub, UUID du Hub jamais une adresse ; sans --yes : simulation
+  notifuse-admin workspace-admins:list <ws>   rôles owner|admin|member + admin_granted / admin_withdrawn
+  notifuse-admin admin:attach-owner --data '{"tenant_id":..,"owner_email":..,"hub_user_id":..}' [--transfer --yes]
+                                          sans --transfer : refus si un autre propriétaire humain existe. ⚠ --transfer RÉTROGRADE l'ancien propriétaire
   notifuse magic-link <ws> [--email e]    génère un lien de connexion (route SSO HMAC, aucune clé créée)
   notifuse profiles:overview [ws] [--json]  VÉRITÉ des profils d'envoi : plafond du jour + porte limitante, reste,
                                           fusible par couple, fenêtre, classes exclues, pause, IMAP lié (lecture, clé scopée OK)
@@ -762,13 +768,15 @@ def owner_login_url(env, tenant_id):
     st, p = call_hmac(env, "GET", "/api/veridian/membres?" + urllib.parse.urlencode({"workspace_id": tenant_id}))
     if st != 200 or not (isinstance(p, dict) and isinstance(p.get("members"), list)):
         die(f"propriétaire de '{tenant_id}' non lu (HTTP {st}) : {p}. Rien n'a été tenté.", code=2)
-    owners = [m for m in p["members"] if isinstance(m, dict) and m.get("role") == "owner" and m.get("hub_user_id")]
+    # Un admin d'espace (fiche 95) a les droits utiles : le nôtre passe avant d'emprunter le compte d'un client propriétaire.
+    owners = [m for m in p["members"] if isinstance(m, dict) and m.get("hub_user_id")
+              and (m.get("role") == "owner" or (m.get("role") == "admin" and (m.get("email") or "").lower().endswith((DEFAULT_OWNER_EMAIL.lower(), "@veridian.site"))))]
     if not owners:
         die(f"espace '{tenant_id}' sur {env} : aucun propriétaire relié à une personne du Hub (hub_user_id). "
             f"Relier le compte au Hub (sync-member / attach-member), puis relancer. Rien n'a été créé.", code=2)
     # Le propriétaire de chez nous d'abord ; celui d'un client en dernier recours, et on le dit. Un compte supprimé au Hub est refusé : on passe au suivant.
     ours = (DEFAULT_OWNER_EMAIL.lower(), "@veridian.site")
-    owners.sort(key=lambda m: not (m.get("email") or "").lower().endswith(ours))
+    owners.sort(key=lambda m: (not (m.get("email") or "").lower().endswith(ours), m.get("role") != "owner"))
     for m in owners:
         st, r = call_hmac(env, "POST", "/api/sso/issue-magic-link",
                           {"hub_user_id": m["hub_user_id"], "email": m.get("email") or "", "email_proven": False,
@@ -4254,6 +4262,93 @@ def cmd_admin_gc(a):
     out(*call_hmac(a.env, "POST", "/api/veridian/admin/gc-orphan-workspace-dbs", body))
 
 
+# ---- admins d'espace (rôle « admin » : tous les droits d'un propriétaire sauf supprimer l'espace, transférer la propriété,
+# retirer un propriétaire). Route HMAC Hub /api/hub/workspace-admins. Une PERSONNE du Hub (hub_user_id), jamais une adresse.
+WORKSPACE_ADMINS_ROUTE = "/api/hub/workspace-admins"
+_WSADMIN_ERRORS = {
+    "user_not_in_app": "cette personne du Hub n'a pas de compte dans l'app : la relier d'abord (sync-member / attach-member).",
+    "not_a_member": "cette personne n'est pas membre de l'espace : l'attacher d'abord (tenants:attach-member).",
+    "tenant_not_found": "espace inconnu : rien n'a été modifié.",
+    "admin_withdrawn": "le rôle admin a été retiré à cette personne : --reinstate pour le rétablir.",
+    "is_owner": "cette personne est propriétaire : le rôle admin ne s'applique pas à un propriétaire.",
+}
+_UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+
+def _hub_user_uuid(value, flag):
+    """UUID d'une personne du Hub, ou refus (sortie 2). Une adresse n'est JAMAIS acceptée (fiche 89)."""
+    if not value or not _UUID_RE.match(value):
+        die(f"{flag} : l'UUID de la personne du Hub (36 caractères) est requis, jamais une adresse "
+            f"({'adresse refusée' if value and '@' in value else 'valeur invalide'}).", code=2)
+    return value.lower()
+
+
+def _error_code(payload):
+    if isinstance(payload, dict):
+        for k in ("code", "error"):
+            if isinstance(payload.get(k), str):
+                return payload[k]
+    return ""
+
+
+def _wsadmin_change(a, action):
+    body = {"workspace_id": a.workspace, "hub_user_id": _hub_user_uuid(a.hub_user_id, "--hub-user-id"),
+            "action": action, "reason": a.reason}
+    if a.actor_hub_user_id:
+        body["actor_hub_user_id"] = _hub_user_uuid(a.actor_hub_user_id, "--actor-hub-user-id")
+    if action == "grant":
+        body["reinstate"] = bool(a.reinstate)
+    if not a.yes:
+        print(f"DRY-RUN (rien n'est envoyé) : POST {WORKSPACE_ADMINS_ROUTE}")
+        print(json.dumps(body, indent=2, ensure_ascii=False))
+        print("Ajoute --yes pour l'exécuter.", file=sys.stderr)
+        return
+    st, p = call_hmac(a.env, "POST", WORKSPACE_ADMINS_ROUTE, body)
+    hint = _WSADMIN_ERRORS.get(_error_code(p))
+    if st not in (200, 201) and hint:
+        print(f"✗ {hint}", file=sys.stderr)
+    out(st, p)
+
+
+def cmd_workspace_admins_grant(a):
+    _wsadmin_change(a, "grant")
+
+
+def cmd_workspace_admins_revoke(a):
+    _wsadmin_change(a, "revoke")
+
+
+def cmd_workspace_admins_list(a):
+    q = urllib.parse.urlencode({"workspace_id": a.workspace})
+    st, p = call_hmac(a.env, "GET", f"{WORKSPACE_ADMINS_ROUTE}?{q}")
+    if st == 200 and not (isinstance(p, dict) and isinstance(p.get("members"), list)):
+        die("réponse sans liste de membres (route absente de cette version ?) : rôles NON LUS.", code=2)
+    out(st, p)
+
+
+OWNER_EXISTS_MSG = "un autre propriétaire humain existe ; --transfer pour lui retirer la propriété"
+
+
+def cmd_admin_attach_owner(a):
+    """admin:attach-owner : rattache un propriétaire à un espace. Sans --transfer, le serveur refuse (409 owner_exists) si un
+    autre propriétaire humain existe : rien n'est muté. ⚠ --transfer RÉTROGRADE l'ancien propriétaire (TransferOwnership)."""
+    body = _json_arg(a.data) or {}
+    if not isinstance(body, dict):
+        die("--data : un objet JSON est attendu.", code=2)
+    body.pop("transfer", None)  # le drapeau seul décide : jamais de transfert glissé dans --data
+    if a.transfer:
+        body["transfer"] = True
+        if not a.yes:
+            print("DRY-RUN (rien n'est envoyé) : POST /api/veridian/admin/attach-owner")
+            print(json.dumps(body, indent=2, ensure_ascii=False))
+            print("⚠ --transfer rétrograde l'ancien propriétaire de l'espace. Ajoute --yes pour l'exécuter.", file=sys.stderr)
+            return
+    st, p = call_hmac(a.env, "POST", "/api/veridian/admin/attach-owner", body)
+    if st == 409 and _error_code(p) == "owner_exists":
+        die(OWNER_EXISTS_MSG + ". Rien n'a été modifié.", code=2)
+    out(st, p)
+
+
 def cmd_admin_stats(a):
     out(*call_hmac(a.env, "GET", "/api/veridian/admin/test-tenants-stats", None))
 
@@ -4627,12 +4722,13 @@ RAW_ROUTES = [
     ("veridian:workspaces-attach-member", "POST",
      "/api/veridian/workspaces/{tenantId}/attach-member", "hmac", ["tenantId"]),
     ("admin:cache-invalidate", "POST", "/api/veridian/admin/cache/invalidate", "hmac", []),
-    ("admin:attach-owner", "POST", "/api/veridian/admin/attach-owner", "hmac", []),
     ("admin:pricing-cache", "GET", "/api/veridian/admin/pricing-cache", "hmac", []),
     ("sso:issue-magic-link", "POST", "/api/sso/issue-magic-link", "hmac", []),
     ("users:by-email", "GET", "/api/users/by-email", "hmac", []),
     ("hub:users", "GET", "/api/hub/users", "hmac", []),
     ("admin:ghost-lists", "GET", "/api/veridian/admin/ghost-lists", "hmac", []),
+    ("admin:platform-admin", "POST", "/api/veridian/admin/platform-admin", "hmac", []),
+    ("admin:platform-admin-list", "GET", "/api/veridian/admin/platform-admin", "hmac", []),
     ("hub:organisation-sync", "POST", "/api/hub/organisations/sync", "hmac", []),
     ("hub:organisation-version", "GET", "/api/hub/organisations/sync", "hmac", []),
     ("hub:abonnement", "POST", "/api/hub/evenements/abonnement", "hmac", []),
@@ -5167,6 +5263,30 @@ def build_parser(extra=None):
              "plafonds, recouvrement de contenu, vivier. Sort en 2 si BLOQUANT.")
     sp.add_argument("workspace", nargs="?", default=None)
     sp.set_defaults(func=cmd_campaign_audit)
+
+    # ---- rôle d'espace « admin » (HMAC Hub, notifuse-admin seul) ----
+    for _n, _f, _h in (("grant", cmd_workspace_admins_grant, "donne le rôle admin d'un espace à une personne du Hub"),
+                       ("revoke", cmd_workspace_admins_revoke, "retire le rôle admin d'un espace à une personne du Hub")):
+        sp = sub.add_parser(f"workspace-admins:{_n}", help=_h + " (HMAC Hub ; sans --yes : simulation)")
+        sp.add_argument("workspace", nargs="?", default=None)
+        sp.add_argument("--hub-user-id", dest="hub_user_id", required=True, help="UUID de la personne du Hub (jamais une adresse)")
+        sp.add_argument("--reason", required=True)
+        sp.add_argument("--actor-hub-user-id", dest="actor_hub_user_id", required=True, help="UUID de la personne du Hub qui agit")
+        if _n == "grant":
+            sp.add_argument("--reinstate", action="store_true", help="rétablit un admin dont le rôle avait été retiré")
+        sp.add_argument("--yes", action="store_true", help="exécute (sinon : affiche le corps et ne fait rien)")
+        sp.set_defaults(func=_f, _routes=[WORKSPACE_ADMINS_ROUTE])
+    sp = sub.add_parser("workspace-admins:list", help="rôles des membres d'un espace : owner|admin|member, admin_granted, admin_withdrawn (HMAC Hub)")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.set_defaults(func=cmd_workspace_admins_list, _routes=[WORKSPACE_ADMINS_ROUTE])
+
+    sp = sub.add_parser("admin:attach-owner",
+        help="/api/veridian/admin/attach-owner (POST, HMAC) ; sans --transfer, refus si un autre propriétaire humain existe ; "
+             "⚠ --transfer rétrograde l'ancien propriétaire")
+    sp.add_argument("--data", help="body JSON (ou @file) : tenant_id, owner_email, hub_user_id")
+    sp.add_argument("--transfer", action="store_true", help="⚠ retire la propriété à l'autre propriétaire humain (envoie transfer:true)")
+    sp.add_argument("--yes", action="store_true", help="avec --transfer : exécute (sinon simulation)")
+    sp.set_defaults(func=cmd_admin_attach_owner, _routes=["/api/veridian/admin/attach-owner"])
 
     sp = sub.add_parser("doctor", help="self-test health + HMAC + cold-simulate")
     sp.set_defaults(func=cmd_doctor)

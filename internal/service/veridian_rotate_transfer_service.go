@@ -260,17 +260,25 @@ func (s *veridianService) TransferOwner(ctx context.Context, input domain.Transf
 	// Resolver l'ancien owner AVANT le transfer pour le response payload.
 	// On ne fail PAS si non resolvable (workspace orphelin) — on met "" et
 	// AttachOwner gerera l'op (incluant le 404 si tenant absent).
-	var oldOwnerEmail string
+	ours, oursErr := s.ours(ctx, input.TenantID)
+	if oursErr != nil {
+		return nil, oursErr
+	}
+	var oldOwner *domain.UserWorkspaceWithEmail
 	if members, listErr := s.workspaceRepo.GetWorkspaceUsersWithEmail(ctx, input.TenantID); listErr == nil {
 		for _, m := range members {
 			if m.Role == "owner" && m.Type == domain.UserTypeUser {
 				// === Veridian patch 2026-10-30 === prefere un owner autre que
 				// le co-owner par defaut (AttachOwner demote celui-la).
-				if oldOwnerEmail == "" || (s.isDefaultCoOwner(oldOwnerEmail) && !s.isDefaultCoOwner(m.Email)) {
-					oldOwnerEmail = m.Email
+				if oldOwner == nil || (ours(oldOwner) && !ours(m)) {
+					oldOwner = m
 				}
 			}
 		}
+	}
+	var oldOwnerEmail string
+	if oldOwner != nil {
+		oldOwnerEmail = oldOwner.Email
 	}
 
 	// Appel AttachOwner qui fait DEJA tout le boulot : find/create new owner
@@ -280,6 +288,7 @@ func (s *veridianService) TransferOwner(ctx context.Context, input domain.Transf
 		TenantID:   input.TenantID,
 		OwnerEmail: input.NewOwnerEmail,
 		HubUserID:  input.OwnerHubUserID,
+		Transfer:   true, // le transfert est l'objet meme de cette route
 	}); err != nil {
 		// AttachOwner propage sql.ErrNoRows si tenant inexistant — handler
 		// map vers 404. Toute autre erreur remonte telle quelle.

@@ -1,11 +1,13 @@
 import { Card, Typography, Button, Empty } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
+import { useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import { MainLayout, MainLayoutSidebar } from '../layouts/MainLayout'
 import { isRootUser } from '../services/api/auth'
 import { useLingui } from '@lingui/react/macro'
 import { SystemSettingsDrawer } from '../components/settings/SystemSettingsDrawer'
+import { recallSpace } from '../utils/veridian_last_space'
 
 const { Text } = Typography
 
@@ -13,6 +15,14 @@ export function DashboardPage() {
   const { t } = useLingui()
   const { workspaces, user } = useAuth()
   const navigate = useNavigate()
+
+  // Retour du Hub sans espace demandé : le dernier que cette personne a ouvert dans ce navigateur, sinon elle choisit. Jamais un autre à sa place.
+  const { rebond } = useSearch({ strict: false }) as { rebond?: unknown }
+  const remembered = rebond === undefined ? undefined : recallSpace(user?.id)
+  const target = workspaces.some((w) => w.id === remembered) ? remembered : undefined
+  useEffect(() => {
+    if (target) navigate({ to: '/console/workspace/$workspaceId', params: { workspaceId: target }, replace: true })
+  }, [target, navigate])
 
   const handleWorkspaceClick = (workspaceId: string) => {
     navigate({

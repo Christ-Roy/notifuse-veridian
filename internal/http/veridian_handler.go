@@ -988,6 +988,13 @@ func (h *VeridianHandler) handleAttachOwner(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	resp, err := h.service.AttachOwner(r.Context(), input)
+	if errors.Is(err, service.ErrAnotherOwnerExists) {
+		WriteJSONErrorCode(w, "owner_exists", "another human owner exists, nothing was changed", http.StatusConflict, map[string]interface{}{
+			"tenant_id": input.TenantID,
+			"hint":      "attach-owner TRANSFERS ownership (the current owner becomes a member): send transfer=true to ask for it; to ADD an administrator use POST /api/veridian/admin/platform-admin",
+		})
+		return
+	}
 	if err != nil {
 		if writeHubPersonError(w, err, input.TenantID, input.HubUserID) {
 			return

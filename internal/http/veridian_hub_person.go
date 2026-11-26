@@ -59,6 +59,8 @@ func writeHubPersonError(w http.ResponseWriter, err error, tenantID, hubUserID s
 		WriteJSONErrorCode(w, ErrCodeHubUserConflict, "this address belongs to another account here", http.StatusConflict, details)
 	case errors.Is(err, service.ErrOwnerNotMember):
 		WriteJSONErrorCode(w, ErrCodeNotAMember, "the new owner must already be a member", http.StatusConflict, details)
+	case errors.Is(err, service.ErrRemovedByOwner):
+		WriteJSONErrorCode(w, "removed_by_owner", "the owner of this workspace removed this person, it is never put back", http.StatusConflict, details)
 	default:
 		return false
 	}

@@ -122,7 +122,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `89` **une personne du Hub = son `hub_user_id`, jamais son adresse** (résolveur unique)
 - `88` organisation poussée par le Hub, abonnement du Hub aux réponses
 - `87` actions d'une autre app (jeton `act`), « Envoyer vers Mail »
-- `86` un membre ne s'ajoute qu'au Hub : routes fermées (403)
+- `86` un membre ne s'ajoute qu'au Hub ; `95` administrateur de plateforme
 - `85` réservoirs, activation par lots, code mode ; `94` import relu dans l'espace
 - `79` CLI utilisateur à parité : qui peut quoi
 

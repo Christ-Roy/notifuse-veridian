@@ -1608,6 +1608,7 @@ func (s *veridianService) AttachOwner(ctx context.Context, input domain.AttachOw
 	if err != nil {
 		return nil, err
 	}
+	newcomer := owner == nil
 	if owner != nil {
 		input.OwnerEmail = owner.Email
 	} else {
@@ -1620,9 +1621,6 @@ func (s *veridianService) AttachOwner(ctx context.Context, input domain.AttachOw
 		}
 		if input.HubUserID != "" {
 			owner.HubUserID = &input.HubUserID
-		}
-		if err := s.userRepo.CreateUser(ctx, owner); err != nil {
-			return nil, fmt.Errorf("create owner user: %w", err)
 		}
 	}
 
@@ -1676,6 +1674,19 @@ func (s *veridianService) AttachOwner(ctx context.Context, input domain.AttachOw
 	if listErr != nil {
 		return nil, fmt.Errorf("list workspace members: %w", listErr)
 	}
+	ours, oursErr := s.ours(ctx, input.TenantID)
+	if oursErr != nil {
+		return nil, oursErr
+	}
+	// Un refus ne laisse rien derriere lui : la personne n'est creee qu'apres.
+	if !input.Transfer && s.anotherHumanOwner(members, owner.ID, ours) {
+		return nil, ErrAnotherOwnerExists
+	}
+	if newcomer {
+		if err := s.userRepo.CreateUser(ctx, owner); err != nil {
+			return nil, fmt.Errorf("create owner user: %w", err)
+		}
+	}
 	var currentOwnerID, currentOwnerEmail string
 	// === Veridian patch 2026-10-30 === Co-owner par defaut : on note s'il etait
 	// owner (pour le rester apres le transfert) et on prefere demoter un autre
@@ -1687,7 +1698,7 @@ func (s *veridianService) AttachOwner(ctx context.Context, input domain.AttachOw
 		}
 	}
 	for _, m := range members {
-		if m.Role == "owner" && m.UserID != owner.ID && !s.isDefaultCoOwner(m.Email) {
+		if m.Role == "owner" && m.UserID != owner.ID && !ours(m) {
 			currentOwnerID = m.UserID
 			currentOwnerEmail = m.Email
 			break
@@ -1864,6 +1875,10 @@ func (s *veridianService) Health(ctx context.Context, tenantID string) (*domain.
 	resp.MembersCount = len(members)
 
 	// 4. Chercher l'owner humain et au moins une api_key.
+	ours, oursErr := s.ours(ctx, tenantID)
+	if oursErr != nil {
+		return nil, oursErr
+	}
 	for _, m := range members {
 		userType, _ := s.lookupUserType(ctx, m.UserID)
 		if m.Role == "owner" && userType == domain.UserTypeUser {
@@ -1871,10 +1886,10 @@ func (s *veridianService) Health(ctx context.Context, tenantID string) (*domain.
 			// === Veridian patch 2026-10-30 === avec un co-owner par defaut,
 			// l'owner rapporte est le proprietaire client : le co-owner n'est
 			// retenu que s'il est le seul owner humain.
-			if s.isDefaultCoOwner(m.Email) && resp.OwnerEmail != "" {
+			if ours(m) && resp.OwnerEmail != "" {
 				continue
 			}
-			if resp.OwnerEmail == "" || !s.isDefaultCoOwner(m.Email) {
+			if resp.OwnerEmail == "" || !ours(m) {
 				resp.OwnerEmail = m.Email
 				resp.OwnerUserID = m.UserID
 			}
@@ -2490,8 +2505,15 @@ func (s *veridianService) IssueMagicLinkForHub(ctx context.Context, input domain
 		// HUB_API_SECRET non configure → 500 cote handler.
 		return nil, fmt.Errorf("build auto-login url: %w", err)
 	}
-	// Page demandee avant le rebond : suivie seulement si elle est sur l'origine de l'app.
-	if nextPath := domain.ConsoleNextPath(s.apiEndpoint, input.Next); nextPath != "" {
+	// Page demandee avant le rebond : suivie seulement si elle est sur l'origine de l'app. Sans elle, une personne de
+	// plusieurs espaces n'est envoyee dans aucun : la console rouvre le dernier qu'elle a choisi ou le demande. `latest`
+	// suit le dernier changement de ROLE, pas le dernier espace ouvert : une personne ajoutee chez un client y
+	// atterrissait au rebond suivant (25/11/2026).
+	nextPath := domain.ConsoleNextPath(s.apiEndpoint, input.Next)
+	if nextPath == "" && len(userWorkspaces) > 1 {
+		nextPath = domain.ConsoleChooseSpacePath
+	}
+	if nextPath != "" {
 		autoLoginURL += "&next=" + url.QueryEscape(nextPath)
 	}
 

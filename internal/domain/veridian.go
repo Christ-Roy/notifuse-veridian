@@ -753,6 +753,10 @@ type AttachOwnerInput struct {
 	OwnerEmail string `json:"owner_email"`
 	// HubUserID : la personne (fiche 89). Vide (scripts d'operateur) : l'adresse.
 	HubUserID string `json:"hub_user_id,omitempty"`
+	// Transfer : geste explicite. AttachOwner TRANSFERE la propriete : l'ancien proprietaire devient membre. Sans ce drapeau,
+	// refus des qu'un autre proprietaire humain existe (un client a ete retrograde le 25/11/2026). Pour AJOUTER un
+	// administrateur : POST /api/veridian/admin/platform-admin (fiche 95).
+	Transfer bool `json:"transfer,omitempty"`
 }
 
 // === Veridian patch — hub-attach-member (2026-05-21) ===
@@ -1011,6 +1015,9 @@ type IssueMagicLinkInput struct {
 	// apres connexion si et seulement si elle est sur l'origine de l'app (ConsoleNextPath).
 	Next string `json:"next,omitempty"`
 }
+
+// ConsoleChooseSpacePath : la console rouvre le dernier espace choisi par cette personne dans ce navigateur, sinon le demande.
+const ConsoleChooseSpacePath = "/console?rebond=1"
 
 // ConsoleNextPath rend le chemin (avec requete) de `next` quand il designe une page de la console sur
 // l'origine de l'app, "" sinon (l'appelant retombe sur l'accueil du workspace). Accepte une URL absolue
