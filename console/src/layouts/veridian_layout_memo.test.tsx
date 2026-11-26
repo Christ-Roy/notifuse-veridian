@@ -28,6 +28,7 @@ vi.mock('../components/mail/veridian_mail_menu_item', () => ({ veridianInboxMenu
 vi.mock('../components/veridian_organisation', () => ({ VeridianBrandProvider: ({ children }: { children?: React.ReactNode }) => <>{children}</> }))
 vi.mock('../components/veridian_brand_header_link', () => ({ VeridianBrandHeaderLink: () => null }))
 vi.mock('../components/veridian_connect_ai', () => ({ VeridianConnectAI: () => null }))
+vi.mock('../components/veridian_mon_ia', () => ({ VeridianMonIA: () => null }))
 vi.mock('../components/veridian_brand_footer', () => ({ VeridianBrandFooter: () => null }))
 vi.mock('../components/veridian_soft_delete_banner', () => ({ VeridianSoftDeleteBanner: () => null }))
 vi.mock('../components/veridian_logo', () => ({ VeridianLogo: () => null }))
