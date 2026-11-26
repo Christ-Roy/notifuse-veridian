@@ -122,3 +122,12 @@ usagers avant.
 Mesuré en prod (parcours Mail) : une réponse écrite depuis la boîte du profil transactionnel réservé est partie d'un profil commercial,
 sous une autre adresse. Le basculement de pool (`veridian_pool_failover.go`) retirait le profil réservé des candidats. Un mail de boîte
 (`EmailQueueSourceMail`, `mail.messages.send|reply`) est désormais épinglé à son profil : il part de cette adresse ou il attend.
+
+## Épreuve réelle du parcours en prod (26/11/2026)
+`python3 scripts/e2e/parcours-mail-prod.py --real-send` (org jetable du Hub ; `--reprendre <état.json>`, `--nettoyer-seulement`) : profils, import
+groupé, segment, modèle avec désinscription, séquence, envoi RÉEL entre deux adresses neuves à nous, réception par le MX Notifuse (en-têtes
+`Authentication-Results` lus), réponse humaine, désinscription un clic, retrait des profils. Passe du 26/11 09:28Z : tout prouvé.
+**Défaut d'infra relevé (VER-239, à trancher)** : `mail-relay-nord` se croit destinataire final de `messagerie-nord-776.fr` et livre en local
+(Dovecot, 550 pour une adresse inconnue) au lieu du MX public, qui est Notifuse : un envoi par ce relais vers une adresse de ce domaine
+n'atteint jamais Notifuse. L'épreuve passe donc par le relais `agence-veridian.fr`. Chaque relais copie tout envoi à `archive@`, transvasé
+dans le libellé Gmail « Agences Veridian/Envoyé ».
