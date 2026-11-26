@@ -13,12 +13,13 @@ import (
 
 // Outcomes d'une ligne close (colonne outcome).
 const (
-	OutcomeAccepted = "accepte" // 200 du Hub (acceptée, doublon ou ignorée : le Hub l'a lue)
-	OutcomeRefused  = "refuse"  // 400, 409, 413 : lot abandonné, jamais rejoué
-	OutcomeClosed   = "ferme"    // 200 avec raison : lu par le Hub, rien relayé au CRM, jamais rejoué
-	OutcomeExpired  = "perime"  // plus de 7 jours : le Hub l'ignorerait
-	OutcomeOverflow = "debordement"
-	OutcomeOrphan   = "orphelin" // le message a disparu
+	OutcomeAccepted     = "accepte" // 200 du Hub (acceptée, doublon ou ignorée : le Hub l'a lue)
+	OutcomeRefused      = "refuse"  // 400, 409, 413 : lot abandonné, jamais rejoué
+	OutcomeClosed       = "ferme"   // 200 avec raison : lu par le Hub, rien relayé au CRM, jamais rejoué
+	OutcomeExpired      = "perime"  // plus de 7 jours : le Hub l'ignorerait
+	OutcomeOverflow     = "debordement"
+	OutcomeOrphan       = "orphelin"  // le message a disparu
+	OutcomeUnsubscribed = "desabonne" // l'espace n'a plus l'abonnement du Hub : rien ne partira
 )
 
 // Stats : l'état de la file d'un espace.
@@ -221,4 +222,16 @@ func ReadSubscription(ctx context.Context, db *sql.DB) (Subscription, bool, erro
 	}
 	s.Enabled = enabled.Valid && enabled.Bool
 	return s, err == nil, err
+}
+
+// CloseUnsubscribed clôt les lignes en attente depuis plus de grace d'un espace qui n'a plus l'abonnement du Hub (rien ne partira) ;
+// le délai couvre un abonnement éteint puis rallumé (rotation du secret).
+func CloseUnsubscribed(ctx context.Context, db *sql.DB, grace time.Duration) (int, error) {
+	r, err := db.ExecContext(ctx, `UPDATE veridian_activite_outbox SET done_at = NOW(), outcome = $1
+		WHERE done_at IS NULL AND created_at < NOW() - make_interval(secs => $2)`, OutcomeUnsubscribed, grace.Seconds())
+	if err != nil {
+		return 0, err
+	}
+	n, _ := r.RowsAffected()
+	return int(n), nil
 }

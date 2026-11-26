@@ -48,6 +48,9 @@ entrée (capture de l'envoyé, hôte du clic). Lots de 200 événements ET 1 Mo 
 rejoué (même `lot_id`) est dédoublonné par le Hub (`doublons`) ; deux lots distincts portant le même `(rfc_message_id, event)` sont
 absorbés par le CRM et reviennent en `crm.ignorees`, pas en `doublons`. Sans effet sur la fiche : pas de réservation des lignes (Hub, 26/11).
 
+**Espace désabonné** (abonnement du Hub retiré ou éteint) : rien ne part ; ses lignes en attente depuis plus d'une heure sont closes
+`desabonne` et comptées (l'heure couvre un abonnement éteint puis rallumé, qui change le secret).
+
 **Bornes** (toutes les 10 min par espace) : un événement de plus de 7 jours est clos `perime` (le Hub l'ignorerait) ; au-delà de
 100 000 en attente, les plus vieux sont clos `debordement` (journal `error`) ; les lignes closes partent après 2 jours, 50 000 gardées au plus.
 
@@ -93,3 +96,9 @@ respecté, 400 non rejoué, 5xx rejoué après `Retry-After` puis attente croiss
 écarté, URL réduite à l'hôte, aucun corps, abonnement éteint ou d'un client sans effet, adresse détournée non suivie, bornes tenues.
 Signature : vecteur officiel Standard Webhooks, bibliothèque de référence et portage de `veridian-hub/lib/evenements/signature.ts` ; la
 routine du Hub elle-même accepte le vecteur (exécutée par `tsx` le 26/11).
+
+## Dettes
+
+- **Lien de tenant d'épreuve sur `coldtest` (staging, 26/11/2026)** : `38bfa0a5-cade-4724-acbf-34d723fa9bba`, posé par `hub:tenant-link` pour
+  l'épreuve de la file (abonnement retiré ensuite). Aucune route ne délie un espace de son tenant (`replace` re-pointe seulement) : à ouvrir
+  côté Hub/Notifuse, puis retirer ce lien.

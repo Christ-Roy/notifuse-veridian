@@ -205,12 +205,23 @@ func (w *Worker) workspace(ctx context.Context, ws string, now time.Time, agg *p
 	if st.failures > 0 {
 		agg.failing++
 	}
-	if !w.Enabled || stats.Ready == 0 || (len(w.Only) > 0 && !w.Only[ws]) {
+	if stats.Pending == 0 {
 		return
 	}
 	sub, found, err := ReadSubscription(ctx, db)
-	if err != nil || !found || !sub.Enabled {
-		return // espace délié du Hub : la file se périme seule
+	if err != nil {
+		return
+	}
+	if !found || !sub.Enabled {
+		// Espace délié du Hub : rien ne partira. Les lignes sont closes après une heure (un abonnement éteint puis rallumé les garde).
+		if n, err := CloseUnsubscribed(ctx, db, time.Hour); err == nil && n > 0 {
+			w.Metrics.AddEvents(OutcomeUnsubscribed, n)
+			log.WithField("closed", n).Info("Activité Mail : espace sans abonnement du Hub, événements en attente abandonnés")
+		}
+		return
+	}
+	if !w.Enabled || stats.Ready == 0 || (len(w.Only) > 0 && !w.Only[ws]) {
+		return
 	}
 	if now.Before(st.pauseUntil) && !(st.lastVerdict == Unauthorized && fingerprint(sub.Secret) != st.deniedSecret) {
 		return

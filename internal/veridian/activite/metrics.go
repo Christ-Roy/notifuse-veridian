@@ -31,7 +31,7 @@ func NewMetrics() *Metrics {
 	for _, k := range []string{"evenements_fermes", "paire_eteinte", "organisation_inactive", "autre"} {
 		m.closed[k] = 0
 	}
-	for _, k := range []string{"accepte", "doublon", "ignore", OutcomeClosed, OutcomeRefused, OutcomeExpired, OutcomeOverflow, OutcomeOrphan} {
+	for _, k := range []string{"accepte", "doublon", "ignore", OutcomeClosed, OutcomeRefused, OutcomeExpired, OutcomeOverflow, OutcomeOrphan, OutcomeUnsubscribed} {
 		m.events[k] = 0
 	}
 	for _, v := range []Verdict{Accepted, Refused, Unauthorized, Retry} {
@@ -105,7 +105,7 @@ func (m *Metrics) Write(w io.Writer) {
 			fmt.Fprintf(w, "%s{%s=%q} %d\n", name, label, k, vals[k])
 		}
 	}
-	c("veridian_activite_events_total", "Evenements par issue (accepte, doublon, ignore par le Hub ; ferme = lu sans relais ; refuse, perime, debordement, orphelin ici).", "resultat", m.events)
+	c("veridian_activite_events_total", "Evenements par issue (accepte, doublon, ignore par le Hub ; ferme = lu sans relais ; refuse, perime, debordement, orphelin, desabonne ici).", "resultat", m.events)
 	c("veridian_activite_lots_total", "Lots postes au Hub par verdict.", "resultat", m.lots)
 	c("veridian_activite_lots_fermes_total", "Lots acceptes (200) que le Hub n'a pas relayes au CRM, par raison.", "raison", m.closed)
 }

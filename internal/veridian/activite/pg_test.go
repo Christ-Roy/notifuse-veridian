@@ -470,3 +470,33 @@ func TestWorker_200AvecRaisonCompteAPart(t *testing.T) {
 		t.Fatal("étiquette bornée aux raisons connues")
 	}
 }
+
+// Un espace qui n'a plus l'abonnement du Hub : rien ne part, ses lignes sont closes « desabonne » passé une heure, comptées.
+func TestWorker_EspaceDesabonne(t *testing.T) {
+	db := testDB(t)
+	hub := &fakeHub{t: t, secret: testSecret}
+	srv := httptest.NewServer(hub)
+	defer srv.Close()
+	subscribe(t, db, srv.URL+"/api/evenements/notifuse", testSecret)
+	fill(t, db, 3)
+	exec(t, db, `UPDATE webhook_subscriptions SET enabled = false`) // abonnement éteint par le Hub
+	exec(t, db, `UPDATE veridian_activite_outbox SET created_at = NOW() - INTERVAL '2 hours' WHERE ref_id <> 'ws1_3'`)
+	w := newWorker(db, srv.URL, &clock{time.Now()})
+	w.Pass(context.Background())
+	if hub.calls.Load() != 0 {
+		t.Fatal("espace désabonné : rien ne part vers le Hub")
+	}
+	if c, p := count(t, db, `outcome = 'desabonne'`), count(t, db, `done_at IS NULL`); c != 2 || p != 1 {
+		t.Fatalf("closes %d, en attente %d (la ligne récente attend un réabonnement)", c, p)
+	}
+	var out strings.Builder
+	w.Metrics.Write(&out)
+	if !strings.Contains(out.String(), `veridian_activite_events_total{resultat="desabonne"} 2`) {
+		t.Fatalf("métriques : %s", out.String())
+	}
+	exec(t, db, `UPDATE webhook_subscriptions SET enabled = true`) // réabonné : la ligne récente part
+	w.Pass(context.Background())
+	if hub.calls.Load() != 1 || len(hub.lots[0].Events) != 1 {
+		t.Fatalf("réabonné : %d appels", hub.calls.Load())
+	}
+}
