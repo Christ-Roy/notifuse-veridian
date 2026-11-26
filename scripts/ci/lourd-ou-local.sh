@@ -15,6 +15,15 @@ CMD="$1"
 LSB="$(command -v lourd-si-bastion 2>/dev/null || echo "$HOME/bin/lourd-si-bastion")"
 local_nice() {
   echo "[lourd-ou-local] étape relancée ICI en nice -n 19 : $1" >&2
+  if [ "${#OPT[@]}" -gt 0 ]; then
+    # --go : le Go de la machine. Sur le bastion il vit dans ~/sdk/go/bin, hors du PATH d'un crochet (mesuré le 26/11 :
+    # « go: command not found », le push refusé pour une mauvaise raison). Sans Go : refus explicite, jamais un faux rouge.
+    PATH="$HOME/sdk/go/bin:/usr/local/go/bin:$HOME/go/bin:$PATH"; export PATH
+    if ! go version >/dev/null 2>&1; then
+      echo "[lourd-ou-local] REFUS : lourd injoignable ET aucun Go sur cette machine ; les tests Go n'ont pas tourné, push refusé" >&2
+      return 1
+    fi
+  fi
   nice -n 19 bash -c "$CMD"
 }
 if [ ! -x "$LSB" ]; then
