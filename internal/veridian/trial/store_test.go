@@ -9,6 +9,8 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/Notifuse/notifuse/internal/domain"
 )
 
 func TestSetTrial_EcritStatutEtDate(t *testing.T) {
@@ -60,13 +62,33 @@ func TestGetTrials_ListeVide_AucuneRequete(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestSetHubTenant_EcritEtErrNoRowsSansPlan(t *testing.T) {
+// SetHubTenant passe par l'écriture unique du lien (tenantlink) : contrôles avant l'UPDATE, ErrNoRows sans plan, et jamais de
+// re-pointage (le cas réel est éprouvé sur PostgreSQL dans tenantlink).
+func TestSetHubTenant_EcritParLeLienUniqueEtErrNoRowsSansPlan(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer db.Close()
+	mock.ExpectBegin()
+	mock.ExpectExec(`pg_advisory_xact_lock`).WithArgs("359b76d5-0000").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`SELECT hub_tenant_id FROM veridian_plan WHERE workspace_id = \$1 FOR UPDATE`).WithArgs("ws1").
+		WillReturnRows(sqlmock.NewRows([]string{"hub_tenant_id"}).AddRow(nil))
+	mock.ExpectQuery(`SELECT workspace_id FROM veridian_plan WHERE hub_tenant_id = \$1 AND workspace_id <> \$2`).WithArgs("359b76d5-0000", "ws1").
+		WillReturnRows(sqlmock.NewRows([]string{"workspace_id"}))
 	mock.ExpectExec(`UPDATE veridian_plan SET hub_tenant_id = \$2`).WithArgs("ws1", "359b76d5-0000").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
 	require.NoError(t, (&Store{DB: db}).SetHubTenant(context.Background(), "ws1", "359b76d5-0000"))
-	mock.ExpectExec(`UPDATE veridian_plan`).WillReturnResult(sqlmock.NewResult(0, 0))
+
+	mock.ExpectBegin()
+	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`SELECT hub_tenant_id FROM veridian_plan`).WillReturnRows(sqlmock.NewRows([]string{"hub_tenant_id"}))
+	mock.ExpectRollback()
 	assert.ErrorIs(t, (&Store{DB: db}).SetHubTenant(context.Background(), "ws-sans-plan", "x"), sql.ErrNoRows)
+
+	mock.ExpectBegin()
+	mock.ExpectExec(`pg_advisory_xact_lock`).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(`SELECT hub_tenant_id FROM veridian_plan`).WillReturnRows(sqlmock.NewRows([]string{"hub_tenant_id"}).AddRow("t-ancien"))
+	mock.ExpectRollback()
+	var conflict *domain.HubTenantConflict
+	assert.ErrorAs(t, (&Store{DB: db}).SetHubTenant(context.Background(), "ws1", "t-neuf"), &conflict)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

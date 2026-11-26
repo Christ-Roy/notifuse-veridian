@@ -725,12 +725,20 @@ func (s *veridianService) UpdatePlan(ctx context.Context, input domain.UpdatePla
 	}
 
 	// hub_tenant_id (V73) : une information, ecrite comme le statut d'essai, avant la garde d'immunite.
+	// Un lien qui contredit celui en place n'est pas ecrit, mais ne bloque pas le plan : il est rendu dans la reponse.
+	var linkConflict *domain.HubTenantConflict
 	if input.HubTenantID != "" {
 		if !domain.IsValidHubTenantID(input.HubTenantID) {
 			return nil, fmt.Errorf("invalid hub_tenant_id")
 		}
 		if s.hubTenantStore != nil {
-			if err := s.hubTenantStore.SetHubTenant(ctx, input.TenantID, input.HubTenantID); err != nil {
+			if err := s.hubTenantStore.SetHubTenant(ctx, input.TenantID, input.HubTenantID); errors.As(err, &linkConflict) {
+				if s.logger != nil {
+					s.logger.WithField("tenant_id", input.TenantID).WithField("hub_tenant_id", input.HubTenantID).
+						WithField("linked_hub_tenant_id", linkConflict.LinkedTenant).WithField("linked_tenant_id", linkConflict.LinkedWorkspace).
+						Error("veridian: update-plan, hub_tenant_id refuse (conflit de lien), plan applique quand meme")
+				}
+			} else if err != nil {
 				return nil, fmt.Errorf("store hub tenant id: %w", err)
 			}
 		}
@@ -781,11 +789,12 @@ func (s *veridianService) UpdatePlan(ctx context.Context, input domain.UpdatePla
 	s.touchHubSync(ctx, input.TenantID)
 
 	return &domain.UpdatePlanResponse{
-		TenantID:     input.TenantID,
-		Plan:         input.Plan,
-		PreviousPlan: existing.Plan,
-		PlanSource:   effectiveSource,
-		AppliedAt:    time.Now().UTC(),
+		TenantID:          input.TenantID,
+		Plan:              input.Plan,
+		PreviousPlan:      existing.Plan,
+		PlanSource:        effectiveSource,
+		AppliedAt:         time.Now().UTC(),
+		HubTenantConflict: linkConflict,
 	}, nil
 }
 

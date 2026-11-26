@@ -11,6 +11,7 @@ import (
 	"github.com/lib/pq"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/veridian/tenantlink"
 )
 
 // Store : statut d'essai sur la table système veridian_plan (colonnes V72).
@@ -19,18 +20,11 @@ type Store struct{ DB *sql.DB }
 var _ domain.TrialStore = (*Store)(nil)
 var _ domain.HubTenantStore = (*Store)(nil)
 
-// SetHubTenant écrit l'id de tenant du Hub (V73). sql.ErrNoRows si le workspace n'a pas de plan.
+// SetHubTenant écrit l'id de tenant du Hub (V73) par l'unique écriture du lien (tenantlink), jamais un re-pointage.
+// sql.ErrNoRows si le workspace n'a pas de plan ; *domain.HubTenantConflict si le lien contredit celui en place.
 func (s *Store) SetHubTenant(ctx context.Context, workspaceID, hubTenantID string) error {
-	res, err := s.DB.ExecContext(ctx, `UPDATE veridian_plan SET hub_tenant_id = $2, updated_at = NOW() WHERE workspace_id = $1`, workspaceID, hubTenantID)
-	if err != nil {
-		return err
-	}
-	if n, err := res.RowsAffected(); err != nil {
-		return err
-	} else if n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
+	_, err := (&tenantlink.Store{DB: s.DB}).Link(ctx, workspaceID, hubTenantID, false)
+	return err
 }
 
 // SetTrial écrit le statut d'essai d'un workspace. sql.ErrNoRows si le workspace n'a pas de plan.

@@ -1259,3 +1259,17 @@ func TestConsoleChooseSpacePath_SuiviEtSansEspace(t *testing.T) {
 		t.Fatal("ce chemin ne designe aucun espace")
 	}
 }
+
+// Le message d'un 409 hub_tenant_conflict dit lequel des deux liens tient : l'espace ou le tenant.
+func TestHubTenantConflict_Error(t *testing.T) {
+	assert.Contains(t, (&HubTenantConflict{WorkspaceID: "beta", HubTenantID: "t", LinkedWorkspace: "alpha"}).Error(), "autre espace")
+	assert.Contains(t, (&HubTenantConflict{WorkspaceID: "alpha", HubTenantID: "t2", LinkedTenant: "t1"}).Error(), "autre tenant")
+}
+
+// Les details nomment ce qui tient le lien, et seulement ça (le Hub s'en sert pour décider).
+func TestHubTenantConflict_Details(t *testing.T) {
+	assert.Equal(t, map[string]any{"tenant_id": "beta", "hub_tenant_id": "t", "linked_tenant_id": "alpha"},
+		(&HubTenantConflict{WorkspaceID: "beta", HubTenantID: "t", LinkedWorkspace: "alpha"}).Details())
+	assert.Equal(t, map[string]any{"tenant_id": "alpha", "hub_tenant_id": "t2", "linked_hub_tenant_id": "t1"},
+		(&HubTenantConflict{WorkspaceID: "alpha", HubTenantID: "t2", LinkedTenant: "t1"}).Details())
+}

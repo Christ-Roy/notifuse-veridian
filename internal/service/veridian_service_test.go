@@ -3383,6 +3383,25 @@ func TestUpdatePlan_ApprendLIdDeTenantDuHub(t *testing.T) {
 	assert.Error(t, err, "id invalide refuse")
 }
 
+// Un lien qui contredit celui en place n'est pas écrit, mais un changement de plan (payé) ne se bloque pas pour autant : le plan
+// s'applique et le conflit revient dans la réponse. Une autre panne du stockage, elle, reste une erreur.
+func TestUpdatePlan_ConflitDeLien_PlanAppliqueConflitRendu(t *testing.T) {
+	svc, m := newVeridianService(t)
+	conflict := &domain.HubTenantConflict{WorkspaceID: "ws-hub", HubTenantID: "t-neuf", LinkedTenant: "t-ancien"}
+	svc.ConfigureHubTenantStore(&fakeHubTenantStore{err: conflict})
+	expectUpdatePlanOK(m, "ws-hub", "")
+	resp, err := svc.UpdatePlan(context.Background(), domain.UpdatePlanInput{TenantID: "ws-hub", Plan: "pro", HubTenantID: "t-neuf"})
+	require.NoError(t, err)
+	assert.Equal(t, "pro", resp.Plan)
+	assert.Same(t, conflict, resp.HubTenantConflict)
+
+	svc2, m2 := newVeridianService(t)
+	svc2.ConfigureHubTenantStore(&fakeHubTenantStore{err: errors.New("base coupée")})
+	m2.planRepo.EXPECT().Get(gomock.Any(), "ws-hub").Return(&domain.VeridianPlan{WorkspaceID: "ws-hub", Plan: "free"}, nil)
+	_, err = svc2.UpdatePlan(context.Background(), domain.UpdatePlanInput{TenantID: "ws-hub", Plan: "pro", HubTenantID: "t-neuf"})
+	assert.ErrorContains(t, err, "store hub tenant id")
+}
+
 // Le cablage (veridian_wiring.go) passe par cette interface : si la methode changeait de forme, la coupure des acces de boite (fiche 91)
 // disparaitrait sans bruit. Non cablee, remove-member ne compte rien et ne dit jamais zero.
 func TestConfigureMailAccess_WiringShapeAndAbsence(t *testing.T) {

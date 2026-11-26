@@ -29,3 +29,20 @@ Contrat de l'événement : `docs/veridian/BOITE-UNIFIEE.md`. Lien d'une conversa
 
 Épreuve : `scripts/e2e/organisation-du-hub.py` (staging par défaut, console lue dans Chromium ; `--prod` : couleur seule).
 CLI opérateur : `hub:organisation-sync`, `hub:organisation-version`, `hub:abonnement`, `organisation:get`.
+
+## `POST /api/hub/tenants/link` (HMAC Hub) : le lien espace → tenant (26/11/2026)
+
+Le lien `veridian_plan.hub_tenant_id` est ce par quoi un jeton d'action (`/api/veridian/actions/*`) et une organisation
+poussée retrouvent l'espace : sans lui, 409 `espace_non_relie`. Incident du 26/11 (CRM, cas 48, staging) : le CRM a
+appelé à 01:04:21Z, le lien n'est arrivé qu'à 01:05:02Z, par un `update-plan` manuel. Le `hub link` du Hub ne prévenait
+pas Notifuse, et `update-plan` exige un `plan` qu'il réécrit (quota, événement `tenant.plan_changed`, 409 sur plan offert).
+
+- Corps `{tenant_id, hub_tenant_id, replace?}`. Idempotent : 200 `{tenant_id, hub_tenant_id, changed}`.
+- 400 `invalid_payload`, 404 `tenant_not_found` (espace sans plan), 409 `hub_tenant_conflict` avec `details`
+  (`linked_hub_tenant_id` : l'espace porte un autre tenant ; `linked_tenant_id` : le tenant est porté par un autre espace vivant).
+- `replace: true` re-pointe seulement CET espace. Un tenant n'est jamais posé sur deux espaces vivants (sinon la résolution
+  prend le premier par ordre alphabétique). Un espace supprimé en douceur ne retient pas son tenant.
+- Écriture unique : `tenantlink.Store.Link` (transaction, verrou consultatif sur le tenant). `update-plan` y passe aussi :
+  un conflit n'y est pas écrit mais ne bloque pas le plan, il revient dans `hub_tenant_conflict` de la réponse et en log `error`.
+- Le Hub appelle la route à chaque création, rejeu et `hub link`, et attend le 200 avant de délivrer un jeton d'action.
+- CLI : `notifuse-admin hub:tenant-link`. Mesure prod du 26/11 : 23 espaces vivants, 16 reliés, 0 doublon.

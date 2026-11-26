@@ -609,6 +609,34 @@ func IsValidHubTenantID(v string) bool {
 	return true
 }
 
+// HubTenantConflict : le lien espace→tenant demandé contredit un lien en place ; rien n'est écrit (internal/veridian/tenantlink).
+// LinkedTenant : l'espace porte déjà un autre tenant. LinkedWorkspace : le tenant est déjà porté par un autre espace vivant.
+type HubTenantConflict struct {
+	WorkspaceID     string `json:"tenant_id"`
+	HubTenantID     string `json:"hub_tenant_id"`
+	LinkedTenant    string `json:"linked_hub_tenant_id,omitempty"`
+	LinkedWorkspace string `json:"linked_tenant_id,omitempty"`
+}
+
+func (e *HubTenantConflict) Error() string {
+	if e.LinkedWorkspace != "" {
+		return "ce tenant du Hub est déjà relié à un autre espace"
+	}
+	return "cet espace est déjà relié à un autre tenant du Hub"
+}
+
+// Details : le corps `details` d'un 409 hub_tenant_conflict.
+func (e *HubTenantConflict) Details() map[string]any {
+	d := map[string]any{"tenant_id": e.WorkspaceID, "hub_tenant_id": e.HubTenantID}
+	if e.LinkedTenant != "" {
+		d["linked_hub_tenant_id"] = e.LinkedTenant
+	}
+	if e.LinkedWorkspace != "" {
+		d["linked_tenant_id"] = e.LinkedWorkspace
+	}
+	return d
+}
+
 // UpdatePlanResponse est la reponse de POST /api/tenants/update-plan
 // (CONTRAT-HUB sec. 5.2 : audit trail previous_plan).
 type UpdatePlanResponse struct {
@@ -617,6 +645,9 @@ type UpdatePlanResponse struct {
 	PreviousPlan string     `json:"previous_plan,omitempty"`
 	PlanSource   PlanSource `json:"plan_source"`
 	AppliedAt    time.Time  `json:"applied_at"`
+	// HubTenantConflict : le plan est appliqué, mais le hub_tenant_id reçu contredit le lien en place et n'a pas été écrit.
+	// Un changement de plan payé ne se bloque pas pour un lien ; le lien se règle par POST /api/hub/tenants/link.
+	HubTenantConflict *HubTenantConflict `json:"hub_tenant_conflict,omitempty"`
 }
 
 // SuspendInput est le body de POST /api/tenants/suspend.
