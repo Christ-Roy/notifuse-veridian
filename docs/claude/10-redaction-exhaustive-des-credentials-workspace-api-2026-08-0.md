@@ -23,3 +23,8 @@ les clés LLM/Firecrawl claires/chiffrées et tous les secrets EmailProvider.
 Firecrawl, fournisseurs d'envoi, secret du stockage de fichiers, à tout porteur d'un jeton d'invitation. Elle ne rend plus
 que `{id, name, settings.logo_url}` (`veridianInvitationWorkspace`). Les deux tests upstream de cette route étaient
 neutralisés par `t.Skip` : réactivés (`TestVerifyInvitationTokenRedactsCredentials`, garde du jeu de test).
+
+## ehlo_hostname validé (26/11/2026, chasse sécu lot C)
+`ehlo_hostname` d'une intégration SMTP partait tel quel dans `EHLO %s\r\n` : un CRLF injectait des commandes SMTP vers le
+serveur du profil. `EmailProvider.Validate` appelle `ValidateVeridianEHLOHostname` (`internal/domain/veridian_ehlo_hostname.go`) :
+nom d'hôte ou littéral d'adresse entre crochets, sinon refus à l'écriture.

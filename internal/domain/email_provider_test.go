@@ -2255,3 +2255,22 @@ func TestEmailProvider_VeridianReplyForwardTransport_JSON(t *testing.T) {
 		t.Fatalf("%+v %v", e.VeridianReplyForwardTransport, err)
 	}
 }
+
+// Veridian (26/11, chasse sécu lot C).
+// Le contrôle est branché dans Validate : la même intégration passe avec un nom d'hôte sain (témoin) et tombe, avec une
+// erreur qui nomme ehlo_hostname, dès qu'il porte CRLF.
+func TestEmailProviderValidate_RefuseEHLOInjecte(t *testing.T) {
+	mk := func(ehlo string) *EmailProvider {
+		return &EmailProvider{Kind: EmailProviderKindSMTP, RateLimitPerMinute: 60,
+			SMTP:    &SMTPSettings{Host: "smtp.exemple.fr", Port: 587, Username: "u", Password: "p", UseTLS: true, EHLOHostname: ehlo},
+			Senders: []EmailSender{{ID: "s", Email: "a@exemple.fr", Name: "A", IsDefault: true}}}
+	}
+	const pass = "cle-de-test-cle-de-test-cle-de-t"
+	if err := mk("mail.exemple.fr").Validate(pass); err != nil {
+		t.Fatalf("témoin refusé, le test ne prouverait rien : %v", err)
+	}
+	err := mk("a\r\nRSET").Validate(pass)
+	if err == nil || !strings.Contains(err.Error(), "ehlo_hostname") {
+		t.Fatalf("CRLF dans ehlo_hostname : erreur attendue sur ehlo_hostname, obtenu %v", err)
+	}
+}

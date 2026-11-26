@@ -251,7 +251,7 @@ func (e *EmailProvider) Validate(passphrase string) error {
 	if e.VeridianProfileDailyCap < 0 {
 		return fmt.Errorf("profile daily cap must be greater than or equal to 0")
 	}
-	if err := e.ValidateVeridianHardBounceFreezeThreshold(); err != nil {
+	if err := e.ValidateVeridianSettings(); err != nil {
 		return err
 	}
 	if e.VeridianIsGmailProfile() {
