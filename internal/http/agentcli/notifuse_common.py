@@ -1642,11 +1642,32 @@ def cmd_keys_mint(a):
         var = _store_scoped_key(a.workspace, token, email)
         out(200, {"workspace": a.workspace, "email": email, "role": a.role,
                   "stored_as": var, "env_file": str(ENV_PATH), "token_masked": masked})
-    else:
+    elif getattr(a, "print_secret", False) and sys.stdout.isatty():
         print(f"✓ clé scopée workspace={a.workspace} email={email} role={a.role}")
         print(f"  NOTIFUSE_API_KEY={token}")
-        print("  (imprimée UNE fois — note-la ; --store la range dans "
+        print("  (imprimée UNE fois, à un terminal humain ; --store la range dans "
               "~/credentials/.all-creds.env à la place)")
+    else:
+        # 26/11/2026 : imprimée en clair, la clé d'un espace a fini dans la sortie d'un agent (donc son
+        # journal). La classe se supprime ici : par défaut la clé va dans un fichier 0600, jamais à l'écran.
+        # --print-secret ne l'imprime qu'à un vrai terminal (TTY) ; une sortie capturée la refuse.
+        path = _write_minted_key(a.workspace, email, token)
+        out(200, {"workspace": a.workspace, "email": email, "role": a.role,
+                  "key_file": str(path), "token_masked": masked,
+                  "note": "clé dans key_file (0600), lue par `$(cat key_file)` ; --store pour la ranger dans les credentials"})
+
+
+def _write_minted_key(workspace, email, token):
+    """Range une clé fraîchement créée dans ~/.cache/notifuse-cli/keys/<espace>-<horodatage>.key, 0600, dossier 0700."""
+    d = Path(os.path.expanduser("~/.cache/notifuse-cli/keys"))
+    d.mkdir(parents=True, exist_ok=True)
+    os.chmod(d, 0o700)
+    slug = re.sub(r"[^A-Za-z0-9_-]+", "-", workspace or "espace")
+    path = d / f"{slug}-{int(time.time())}.key"
+    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(token + "\n")
+    return path
 
 
 def cmd_keys_revoke(a):
@@ -5349,7 +5370,9 @@ def build_parser(extra=None):
                      help="member (défaut, complet sur ce workspace) | readonly")
     sp.add_argument("--name", help="base de l'email_prefix (slug auto)")
     sp.add_argument("--store", action="store_true",
-                     help="range la clé dans ~/credentials/.all-creds.env (NOTIFUSE_API_KEY_<WS>) au lieu de l'imprimer")
+                     help="range la clé dans ~/credentials/.all-creds.env (NOTIFUSE_API_KEY_<WS>)")
+    sp.add_argument("--print-secret", dest="print_secret", action="store_true",
+                     help="imprime la clé en clair, SEULEMENT si la sortie est un terminal (sinon : fichier 0600)")
     sp.set_defaults(func=cmd_keys_mint)
 
     sp = sub.add_parser("keys:revoke", help="(ADMIN) révoque une clé API (removeMember, supprime le user api_key)")
