@@ -1,6 +1,6 @@
 // csp-parcours.mjs : vrai parcours de la console sous sa CSP (VER-265), avec relevé des violations et contrôle positif.
 // Lancé par node02 (lourd --navigateur), le lien de connexion passe en mémoire (variable LIEN, jamais écrite) :
-//   LIEN=$(lien SSO) lourd --navigateur --secrets LIEN sh -c 'cd tests/e2e-veridian && npm ci >/dev/null 2>&1 && node ../../scripts/e2e/csp-parcours.mjs <espace>'
+//   LIEN=$(lien SSO) lourd --navigateur --secrets LIEN sh -c 'cd tests/e2e-veridian && npm ci >/dev/null 2>&1 && node csp-parcours.mjs <espace>'
 // Sortie : une ligne JSON « RESULTAT {...} » (pages, violations, contrôle positif) et des lignes « CAPTURE nom base64 »
 // (JPEG), que l'appelant décode. Codes : 0 = parcours fait et contrôle positif rapporté (ou bloqué en enforce),
 // 1 = violation inattendue ou contrôle positif muet, 2 = connexion impossible.
@@ -55,9 +55,20 @@ const ligne = page.locator('table tbody tr').first()
 if (await ligne.count()) {
   await ligne.locator('button, a').first().click({ timeout: 10000 }).catch(() => ligne.click().catch(() => {}))
   await page.waitForTimeout(6000)
-  const code = page.getByText(/code|mjml|html/i).first()
-  if (await code.count()) await code.click({ timeout: 5000 }).catch(() => {})
+  // Étape 2 (le constructeur), puis l'aperçu et son onglet MJML : c'est là que Monaco se charge depuis cdn.jsdelivr.net.
+  const etape2 = page.getByText(/^\s*2\.\s*(Template|Modèle)\s*$/).first()
+  if (await etape2.count()) await etape2.click({ timeout: 5000 }).catch(() => {})
+  else await page.getByRole('button', { name: /^(Next|Suivant)$/ }).first().click({ timeout: 5000 }).catch(() => {})
   await page.waitForTimeout(6000)
+  await page.getByText(/^(Preview|Aperçu)$/).first().click({ timeout: 5000 }).catch(() => {}) // sélecteur segmenté Edit / Preview
+  await page.waitForTimeout(3000)
+  await page.getByRole('tab', { name: /^MJML$/ }).first().click({ timeout: 5000 }).catch(() => {})
+  await page.waitForTimeout(3000)
+  // Données de test : l'éditeur JSON est un Monaco (Preview.tsx), chargé à la demande depuis cdn.jsdelivr.net.
+  await page.getByRole('tab', { name: /Template Data|Données/ }).first().click({ timeout: 5000 }).catch(() => {})
+  await page.waitForTimeout(2000)
+  await page.getByRole('button', { name: /Edit Test Data|Modifier les données/ }).first().click({ timeout: 5000 }).catch(() => {})
+  await page.waitForTimeout(10000)
   res.monaco = (await page.locator('.monaco-editor').count()) > 0
   const v = await violations()
   res.pages.push({ page: 'editeur-modele', violations: v.length, monaco: res.monaco })

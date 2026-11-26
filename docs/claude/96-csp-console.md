@@ -16,3 +16,7 @@ SPA statiques (Vite) : `script-src 'self'` sans `'unsafe-inline'` ni nonce.
   `no-store`). Garde : `console/src/veridian_index_csp.test.ts`.
 - Passage en enforce : après un vrai parcours de la console relu sans violation inattendue, et un contrôle positif
   (un `onerror` injecté doit être bloqué et rapporté).
+- **Passage en enforce le 26/11/2026** après le parcours `tests/e2e-veridian/csp-parcours.mjs` (node02, `lourd --navigateur`,
+  lien SSO par `--secrets`) : 10 pages + éditeur de modèle jusqu'au Monaco des données de test, 0 violation ; le contrôle
+  positif (`onerror` injecté) rapporté (`script-src-attr`, lu dans `csp_violation`). Rejouer après tout ajout de dépendance
+  externe à la console. Repli immédiat : `VERIDIAN_CSP_MODE=report` dans le job.
