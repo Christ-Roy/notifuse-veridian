@@ -325,6 +325,7 @@ func TestVeridianAutoLogin_CSPPropreAvecNonce(t *testing.T) {
 		require.NotNil(t, m, "CSP sans nonce : %q", csp)
 		assert.Contains(t, csp, "default-src 'none'")
 		assert.Contains(t, csp, "frame-ancestors 'none'")
+		assert.Contains(t, csp, "img-src 'self'", "favicon : sans img-src, Firefox rapportait un img-src bloqué (26/11)")
 		for _, d := range strings.Split(csp, ";") {
 			if d = strings.TrimSpace(d); strings.HasPrefix(d, "script-src") {
 				assert.Equal(t, "script-src 'nonce-"+m[1]+"'", d, "script-src : le nonce seul, jamais unsafe-inline")

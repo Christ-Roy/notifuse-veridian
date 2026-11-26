@@ -4,14 +4,15 @@
 // Sortie : une ligne JSON « RESULTAT {...} » (pages, violations, contrôle positif) et des lignes « CAPTURE nom base64 »
 // (JPEG), que l'appelant décode. Codes : 0 = parcours fait et contrôle positif rapporté (ou bloqué en enforce),
 // 1 = violation inattendue ou contrôle positif muet, 2 = connexion impossible.
-import { chromium } from '@playwright/test'
+import { chromium, firefox } from '@playwright/test'
 
 const WS = process.argv[2]
 const LIEN = process.env.LIEN
 if (!WS || !LIEN) { console.log('NON ABOUTI : espace ou LIEN absent'); process.exit(2) }
 const PAGES = ['dashboard', 'contacts', 'lists', 'templates', 'broadcasts', 'automations', 'inbox', 'sending-profiles', 'file-manager', 'settings']
 
-const browser = await chromium.launch({ args: ['--no-sandbox'] })
+// NAVIGATEUR=firefox : Firefox envoie ses rapports par report-uri (requête visible) ; Chrome par l'API Reporting (hors page).
+const browser = process.env.NAVIGATEUR === 'firefox' ? await firefox.launch() : await chromium.launch({ args: ['--no-sandbox'] })
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'fr-FR' })
 // Relevé au niveau du CONTEXTE (fonction exposée) : il survit aux navigations. Le 26/11, un relevé par page (window.__csp)
 // perdait les violations de la page d'atterrissage /veridian/auto-login, et la connexion a été coupée en enforce.
@@ -23,6 +24,11 @@ await ctx.addInitScript(() => {
   })
 })
 const page = await ctx.newPage()
+// Envoi des rapports par le navigateur jusqu'au serveur (report-uri) : chaque requête vers le point de rapport et son statut.
+const envois = []
+ctx.on('request', (q) => { if (q.url().includes('/api/veridian/csp-report')) envois.push({ type: q.resourceType(), ct: q.headers()['content-type'] || '' }) })
+ctx.on('requestfinished', async (q) => { if (q.url().includes('/api/veridian/csp-report')) { const r = await q.response(); envois.push({ statut: r ? r.status() : null }) } })
+ctx.on('requestfailed', (q) => { if (q.url().includes('/api/veridian/csp-report')) envois.push({ echec: q.failure()?.errorText }) })
 const errors = []
 page.on('pageerror', (e) => errors.push(String(e.message).slice(0, 160)))
 let header = null
@@ -90,8 +96,13 @@ await page.waitForTimeout(3000)
 const ctl = await violations()
 res.controle = { execute: await page.evaluate(() => window.__pwned === 1), rapporte: ctl.filter((x) => x.d === 'script-src-attr').length }
 res.csp = header
+// Chrome envoie ses rapports (report-to) par lots, en différé : fermer tout de suite les perdait (26/11 : aucun rapport
+// navigateur n'atteignait le journal). ATTENTE_RAPPORTS secondes avant fermeture, pour éprouver la chaîne jusqu'au serveur.
+const attente = Number(process.env.ATTENTE_RAPPORTS || 0)
+if (attente > 0) await page.waitForTimeout(attente * 1000)
 await browser.close()
 const inattendues = res.violations.filter((x) => x.d !== 'script-src-attr')
+res.envois_rapports = envois.slice(0, 20)
 console.log('RESULTAT ' + JSON.stringify(res))
 const ok = res.controle.rapporte > 0 && (header !== 'enforce' || !res.controle.execute) && inattendues.length === 0
 process.exit(ok ? 0 : 1)

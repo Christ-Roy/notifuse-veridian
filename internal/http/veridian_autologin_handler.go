@@ -219,7 +219,7 @@ func (h *VeridianAutoLoginHandler) handleAutoLogin(w http.ResponseWriter, r *htt
 	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
 	// CSP propre à la page (VER-265) : son seul script, inline, autorisé par un nonce neuf. Rien d'autre ne charge.
 	nonce := middleware.VeridianCSPNonce()
-	middleware.VeridianSetPageCSP(w, "default-src 'none'; script-src 'nonce-"+nonce+"'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+	middleware.VeridianSetPageCSP(w, "default-src 'none'; script-src 'nonce-"+nonce+"'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 	w.WriteHeader(http.StatusOK)
 
 	if err := autoLoginPageTemplate.Execute(w, map[string]interface{}{

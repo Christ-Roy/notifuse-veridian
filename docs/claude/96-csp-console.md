@@ -24,3 +24,8 @@ SPA statiques (Vite) : `script-src 'self'` sans `'unsafe-inline'` ni nonce.
 - **Règles** : toute page HTML rendue par le Go avec un script déclare sa CSP par `VeridianSetPageCSP` + nonce. Avant
   enforce : (1) `obs search csp_violation --since 24h` lu EN ENTIER, groupé par document, zéro hors contrôle positif ;
   (2) `tests/e2e-veridian/csp-parcours.mjs` vert, connexion comprise. Repli immédiat : `VERIDIAN_CSP_MODE=report`.
+- **Rapports navigateur** : Chrome envoie par l'API Reporting (`report-to`), hors de la page et en différé, invisible pour
+  Playwright ; Firefox par `report-uri` (requête visible). Chaîne prouvée le 26/11 par un rapport Firefox réel reçu
+  (favicon de l'auto-login, `img-src` ajouté depuis). `csp-parcours.mjs` : `NAVIGATEUR=firefox`, `ATTENTE_RAPPORTS=<s>`.
+- **Enforce le 26/11/2026 (2e passage)** : nonce de l'auto-login en prod, parcours Chrome vert connexion comprise
+  (12 étapes, 0 violation, Monaco chargé), journal relu sur 24 h (seuls une sonde et le favicon).
