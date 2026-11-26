@@ -3,9 +3,10 @@
 # scripts/ci/controles.tsv). La mécanique ne vit pas ici :
 # ~/nomad-veridian/standards/controles-portables/ — `gardes --help`.
 # Catalogues i18n a jour (une chaine t`...` non extraite casse la CI : check-console-build.sh etape 6).
-# Seulement si le push touche console/src ; un echec bloque, un « non abouti » (rc 2) previent sans bloquer.
+# Seulement si le push touche console/src ; un echec bloque, un « non abouti » (rc 2 : node_modules absent) previent sans bloquer.
+# En LOCAL, nice -n 19 : il réécrit les .po sur place pour qu'on les commite, ce qu'une copie lourd (sans .git) ne peut pas faire.
 if ! git diff --quiet "@{upstream}" -- console/src 2>/dev/null || [ -n "$(git diff --name-only HEAD~1 -- console/src 2>/dev/null)" ]; then
-  scripts/ci/check-i18n-extracted.sh || { rc=$?; [ "$rc" = "2" ] || exit 1; }
+  nice -n 19 scripts/ci/check-i18n-extracted.sh || { rc=$?; [ "$rc" = "2" ] || exit 1; }
 fi
 # Fichiers gelés (lot L0, docs/veridian/MODULARITE.md) : aucune logique Veridian de plus que la ligne de branchement.
 # Un echec bloque ; « non abouti » (rc 2 : base introuvable) previent sans bloquer. Derogation : trailer Frozen-Override.
@@ -13,11 +14,14 @@ scripts/veridian/frozen-files-check.sh || { rc=$?; [ "$rc" = "2" ] || exit 1; }
 # Couverture CLI embarquée (fiche 76) : chaque route /api/* du routeur a sa commande, la CLI embarquée
 # est intègre (MANIFEST) et à jour de sa source. Un echec bloque ; « non abouti » (rc 2) previent sans bloquer.
 scripts/veridian/cli-coverage-check.sh || { rc=$?; [ "$rc" = "2" ] || exit 1; }
+# Étapes LOURDES : hors du bastion par scripts/ci/lourd-ou-local.sh (lourd-si-bastion ; si lourd n'a rien fait tourner, relancées
+# ici en nice -n 19). Jamais sautées : un rouge bloque, et il n'y a plus de « non abouti » qui laisse passer (règle du 26/11).
 # Typecheck des E2E + test de l'aide de signature Hub (vecteurs Go), seulement si le push touche tests/e2e-veridian.
-# Un echec bloque ; « non abouti » (rc 2) previent sans bloquer.
 if ! git diff --quiet "@{upstream}" -- tests/e2e-veridian 2>/dev/null; then
-  scripts/ci/check-e2e-typecheck.sh || { rc=$?; [ "$rc" = "2" ] || exit 1; }
+  scripts/ci/check-e2e-typecheck.sh || exit 1
 fi
+# Tests Go des paquets que le push modifie (vet + test), image Go de lourd. Aucun avant le 26/11 : vus en CI seulement.
+scripts/ci/prepush-go-tests.sh || { echo "pre-push : tests Go ROUGES, push refusé" >&2; exit 1; }
 # Mapping source↔test (Constitution CI §1) : la CI le refuse sinon, 20 à 30 min plus tard (deux fois le
 # 23/11). Choix de ce dépôt (gardes ne joue pas son palier rapide au push, décision du 03/10). ~1 s.
 BASE_REF="$(git rev-parse '@{upstream}' 2>/dev/null || echo origin/veridian)" scripts/ci/check-test-mapping.sh >/tmp/notifuse-mapping-prepush.log 2>&1 || {
