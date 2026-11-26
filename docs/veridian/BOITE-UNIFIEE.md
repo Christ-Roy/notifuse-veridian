@@ -42,7 +42,7 @@ lui-même, sinon objet normalisé + contact. À l'arrivée, un mail qui cite un 
 Déclencheur SQL sur `veridian_mail_message` (mails reçus uniquement) : une livraison par souscription active abonnée,
 dans `webhook_deliveries`. La charge utile ne porte JAMAIS le corps. Une panne du webhook n'empêche jamais de ranger le mail.
 
-### Contrat (V77, VER-247)
+### Contrat (V77, V85, VER-247)
 
 POST, en-têtes Standard Webhooks : `webhook-id` (= `id`, stable entre les réessais : clé d'idempotence), `webhook-timestamp`,
 `webhook-signature: v1,<base64 HMAC-SHA256("id.timestamp.corps")>`, secret `whsec_<base64>`. 10 essais : 30 s, 1, 2, 5, 15, 30 min, 1, 2, 6, 24 h,
@@ -50,7 +50,7 @@ sans ordre garanti. Exemple réel anonymisé :
 ```json
 {"id":"<livraison>","type":"message.received","workspace_id":"exemplews","timestamp":"2026-11-24T16:49:52Z","data":{
  "message_id":"<uuid Notifuse>","rfc_message_id":"abc@mail.exemple.test","kind":"reply_human","match_type":"message_id","direction":"in",
- "profile_id":"<uuid>","email":"contact@exemple.test","from":"contact@exemple.test","subject":"Re: ...","thread_id":"t_<16 hex>",
+ "profile_id":"<uuid>","email":"contact@exemple.test","from":"contact@exemple.test","from_name":"Marie Dupont","subject":"Re: ...","thread_id":"t_<16 hex>",
  "sent_message_id":"exemplews_<uuid>","attachment_count":0,"event_timestamp":"2026-11-24T16:49:50.927791+00:00"}}
 ```
 - `kind` : `reply_human` (un humain), `reply_auto` (absence, accusé automatique), `bounce_hard`, `bounce_soft` (rebond : `from` = mailer-daemon,
@@ -60,6 +60,7 @@ sans ordre garanti. Exemple réel anonymisé :
 - **Un événement par mail** : ni copie Sieve, ni second rangement du même Message-ID par une autre boîte. Deux boîtes qui rangent à la même
   seconde peuvent encore en faire deux, et un mail sans Message-ID exploitable (`rfc_message_id` null) n'est pas regroupé : dédoublonner par
   `(workspace_id, rfc_message_id)`, sinon `message_id`.
+- `from_name` (V85, 26/11/2026) : le nom affiché de l'en-tête From, chaîne vide sans nom. Le Hub en nomme la fiche CRM créée par une réponse.
 - `timestamp` change à chaque réessai, `event_timestamp` non. Objet et adresses y sont : données personnelles.
 
 ## API (jalon 2)

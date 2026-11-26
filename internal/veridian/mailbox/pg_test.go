@@ -442,6 +442,9 @@ func TestWebhookTrigger_MessageReceived(t *testing.T) {
 		if sub != "s1" || ev != "message.received" || mid != m.ID || kind != "reply_human" || email != "marie@exemple-animaux.fr" || sent != "ws1_"+j0uuid {
 			t.Fatalf("livraison: %s %s %s %s %s %s", sub, ev, mid, kind, email, sent)
 		}
+		if !strings.Contains(full, `"from_name": "Marie Dupont"`) {
+			t.Fatalf("le nom affiché de l'expéditeur nomme la fiche créée au CRM (VER-247): %s", full)
+		}
 		if !strings.Contains(full, `"match_type": "message_id"`) || !strings.Contains(full, `"rfc_message_id": "`) {
 			t.Fatalf("rattachement et Message-ID dans l'événement: %s", full)
 		}

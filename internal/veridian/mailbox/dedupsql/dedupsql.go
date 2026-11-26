@@ -84,6 +84,7 @@ const UnsettledFilter = `dedup_key IN (SELECT dedup_key FROM veridian_mail_messa
 // toujours par la boîte du relais), ni un mail déjà signalé par une autre boîte (même Message-ID, hors copie Sieve). Deux boîtes qui
 // rangent le même mail à la même seconde peuvent encore en faire deux : le consommateur dédoublonne par rfc_message_id.
 // match_type dit ce qui rattache le mail à nos envois : message_id, subject (une vraie réponse), sender (un contact connu qui écrit).
+// from_name (V85, VER-247) : le nom affiché de l'en-tête From, vide s'il n'y en a pas ; le Hub en nomme la fiche créée par une réponse.
 var WebhookTriggerFunction = `CREATE OR REPLACE FUNCTION webhook_mail_message_trigger()
 	RETURNS TRIGGER AS $$
 	DECLARE
@@ -113,6 +114,7 @@ var WebhookTriggerFunction = `CREATE OR REPLACE FUNCTION webhook_mail_message_tr
 				'thread_id', NEW.thread_id,
 				'subject', NEW.subject,
 				'from', NEW.from_addr,
+				'from_name', NEW.from_name,
 				'attachment_count', jsonb_array_length(NEW.attachments),
 				'sent_message_id', NEW.link->>'sent_message_id',
 				'event_timestamp', NEW.occurred_at
