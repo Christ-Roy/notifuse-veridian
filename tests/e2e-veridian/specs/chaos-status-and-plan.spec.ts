@@ -1,33 +1,14 @@
 // CI violente — Suite 4 : status endpoint + update-plan + transitions.
 
 import { test, expect } from '@playwright/test';
-import * as crypto from 'crypto';
+import { hubClient } from '../hub-signature';
 import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
 const HUB_API_SECRET = process.env.HUB_API_SECRET!;
 
-function signHMAC(body: string) {
-  const ts = Date.now().toString();
-  return {
-    timestamp: ts,
-    signature: crypto.createHmac('sha256', HUB_API_SECRET).update(`${ts}.${body}`).digest('hex'),
-  };
-}
-
-async function hmacFetch(path: string, method: string, body: object | null = null) {
-  const raw = body ? JSON.stringify(body) : '';
-  const { timestamp, signature } = signHMAC(raw);
-  return fetch(`${NOTIFUSE_URL}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Veridian-Hub-Signature': signature,
-      'X-Veridian-Timestamp': timestamp,
-    },
-    body: raw || undefined,
-  });
-}
+const hub = hubClient(NOTIFUSE_URL, HUB_API_SECRET);
+const hmacFetch = hub.hmacFetch;
 
 async function provisionTenant(tid: string, plan = 'free') {
   // Retry 5x sur 5xx + 404 : meme race upstream que chaos-paywall, voir

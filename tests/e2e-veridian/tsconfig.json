@@ -7,6 +7,8 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
     "types": ["node"]
   },
   "include": [
@@ -15,6 +17,8 @@
     "playwright.config.ts",
     "global-setup.ts",
     "prod-residue.ts",
+    "hub-signature.ts",
+    "global-teardown.ts",
     "playwright.console-suite.config.ts"
   ]
 }

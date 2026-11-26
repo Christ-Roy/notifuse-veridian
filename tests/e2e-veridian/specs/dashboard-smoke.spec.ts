@@ -22,7 +22,7 @@
 // tenant ≤20 chars, afterAll wipe, describe.serial.
 
 import { test, expect, chromium } from '@playwright/test';
-import * as crypto from 'crypto';
+import { hubClient } from '../hub-signature';
 import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
@@ -41,27 +41,8 @@ async function readBody(r: Response): Promise<{ raw: string; json: () => any }> 
   return { raw, json: () => (raw ? JSON.parse(raw) : null) };
 }
 
-function signHMAC(body: string) {
-  const ts = Date.now().toString();
-  return {
-    timestamp: ts,
-    signature: crypto.createHmac('sha256', HUB_API_SECRET).update(`${ts}.${body}`).digest('hex'),
-  };
-}
-
-async function hmacFetch(path: string, method: string, body: object | null = null) {
-  const raw = body ? JSON.stringify(body) : '';
-  const { timestamp, signature } = signHMAC(raw);
-  return fetch(`${NOTIFUSE_URL}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Veridian-Hub-Signature': signature,
-      'X-Veridian-Timestamp': timestamp,
-    },
-    body: raw || undefined,
-  });
-}
+const hub = hubClient(NOTIFUSE_URL, HUB_API_SECRET);
+const hmacFetch = hub.hmacFetch;
 
 // Endpoints analytics que le dashboard appelle. On surveille tout 5xx sur ces
 // chemins pendant le chargement de la page (c'est le bug P0 exact : un 500).
@@ -136,7 +117,7 @@ smokeDescribe('@cold Dashboard smoke — charge sans 500 sur workspace neuf (sta
         if (r.url().includes('/api/')) inFlight++, (lastApi = Date.now());
       });
       for (const ev of ['requestfinished', 'requestfailed'] as const) {
-        page.on(ev, (r) => {
+        page.on(ev as 'requestfinished', (r) => {
           if (r.url().includes('/api/')) inFlight--, (lastApi = Date.now());
         });
       }

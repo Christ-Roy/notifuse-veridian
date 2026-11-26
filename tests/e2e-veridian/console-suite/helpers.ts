@@ -20,6 +20,7 @@
 
 import { expect, type Page, type ConsoleMessage } from '@playwright/test'
 import * as crypto from 'crypto'
+import { hubFetch } from '../hub-signature'
 import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!
@@ -32,40 +33,15 @@ if (!NOTIFUSE_URL || !HUB_API_SECRET) {
 export { NOTIFUSE_URL, HUB_API_SECRET }
 
 /**
- * Sign un body HMAC SHA256 pour les endpoints `/api/tenants/*` et
- * `/api/veridian/admin/*` côté Notifuse. Format `timestamp.body`,
- * timestamp en millisecondes Unix (drift accepté ±5min côté serveur).
- */
-export function signHMAC(body: string): { timestamp: string; signature: string } {
-  const timestamp = Date.now().toString()
-  const signature = crypto
-    .createHmac('sha256', HUB_API_SECRET)
-    .update(`${timestamp}.${body}`)
-    .digest('hex')
-  return { timestamp, signature }
-}
-
-/**
- * HMAC fetch helper : sign + envoie en POST/GET/DELETE avec headers
- * `X-Veridian-Hub-Signature` + `X-Veridian-Timestamp`. Retourne la Response
- * brute (l'appelant fait .text/.json selon besoin).
+ * HMAC fetch helper (signature v2, via l'aide partagée hub-signature.ts) : retourne la Response brute
+ * (l'appelant fait .text/.json selon besoin).
  */
 export async function hmacFetch(
   path: string,
   method: string,
   body: object | null = null
 ): Promise<Response> {
-  const rawBody = body ? JSON.stringify(body) : ''
-  const { timestamp, signature } = signHMAC(rawBody)
-  return fetch(`${NOTIFUSE_URL}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Veridian-Hub-Signature': signature,
-      'X-Veridian-Timestamp': timestamp
-    },
-    body: rawBody || undefined
-  })
+  return hubFetch(NOTIFUSE_URL, HUB_API_SECRET, path, method, { body })
 }
 
 /**

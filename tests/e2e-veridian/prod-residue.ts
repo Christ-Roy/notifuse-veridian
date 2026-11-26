@@ -1,4 +1,4 @@
-import * as crypto from 'crypto'
+import { signHubV2 } from './hub-signature.ts'
 
 // Garde « aucun jetable laissé en prod » (fiche 64, 11/10/2026).
 //
@@ -16,21 +16,15 @@ import * as crypto from 'crypto'
 
 export const TEST_TENANT_MOTIF = /^(e2e|test|abuse|rot|fixchk|capcheck|nomtest|agenttest|clitest|ws\d)/i
 
-function sign(secret: string, body: string) {
-  const ts = Date.now().toString()
-  const signature = crypto.createHmac('sha256', secret).update(`${ts}.${body}`).digest('hex')
-  return {
-    'Content-Type': 'application/json',
-    'x-veridian-app': 'notifuse',
-    'X-Veridian-Hub-Signature': signature,
-    'X-Veridian-Timestamp': ts,
-  }
+function sign(secret: string, method: string, url: string, body: string) {
+  return { 'Content-Type': 'application/json', 'x-veridian-app': 'notifuse', ...signHubV2(secret, method, url, body) }
 }
 
 /** Identifiants des tenants gérés, ou null si la mesure n'a pas abouti. */
 export async function listManagedTenants(baseUrl: string, secret: string): Promise<string[] | null> {
   try {
-    const r = await fetch(`${baseUrl}/api/veridian/admin/tenants?limit=2000`, { method: 'GET', headers: sign(secret, '') })
+    const url = `${baseUrl}/api/veridian/admin/tenants?limit=2000`
+    const r = await fetch(url, { method: 'GET', headers: sign(secret, 'GET', url, '') })
     if (!r.ok) return null
     const j: any = await r.json()
     if (!Array.isArray(j.managed) || j.managed.length === 0) return null // vide = non abouti, jamais « 0 »
@@ -51,7 +45,8 @@ export function diffNewTenants(before: string[], after: string[]) {
 
 async function wipe(baseUrl: string, secret: string, ids: string[]) {
   const body = JSON.stringify({ tenant_ids: ids })
-  const r = await fetch(`${baseUrl}/api/veridian/admin/wipe-test-tenants`, { method: 'POST', headers: sign(secret, body), body })
+  const url = `${baseUrl}/api/veridian/admin/wipe-test-tenants`
+  const r = await fetch(url, { method: 'POST', headers: sign(secret, 'POST', url, body), body })
   return r.ok
 }
 

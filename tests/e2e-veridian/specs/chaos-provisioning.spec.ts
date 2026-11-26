@@ -3,6 +3,7 @@
 
 import { test, expect } from '@playwright/test';
 import * as crypto from 'crypto';
+import { hubClient, signHubV2 } from '../hub-signature';
 import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
@@ -12,29 +13,9 @@ if (!NOTIFUSE_URL || !HUB_API_SECRET) {
   throw new Error('NOTIFUSE_URL and HUB_API_SECRET env vars required');
 }
 
-function signHMAC(body: string, secret = HUB_API_SECRET, ts = Date.now().toString()) {
-  const signature = crypto.createHmac('sha256', secret).update(`${ts}.${body}`).digest('hex');
-  return { timestamp: ts, signature };
-}
-
-async function hmacFetch(
-  path: string,
-  method: string,
-  body: object | null = null,
-  overrides: Partial<{ timestamp: string; signature: string; secret: string }> = {},
-) {
-  const rawBody = body ? JSON.stringify(body) : '';
-  const { timestamp: defaultTs, signature: defaultSig } = signHMAC(rawBody, overrides.secret);
-  return fetch(`${NOTIFUSE_URL}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Veridian-Hub-Signature': overrides.signature ?? defaultSig,
-      'X-Veridian-Timestamp': overrides.timestamp ?? defaultTs,
-    },
-    body: rawBody || undefined,
-  });
-}
+const hub = hubClient(NOTIFUSE_URL, HUB_API_SECRET);
+const hmacFetch = (path: string, method: string, body: object | null = null, overrides: Partial<{ timestamp: string; secret: string }> = {}) =>
+  hub.hubFetch(path, method, { body, ...overrides });
 
 // === Veridian patch 2026-05-21 (Lot N étape 1+2) ===
 // Prefix unifié `tst` + cleanup afterEach au fil de l'eau.
@@ -129,14 +110,12 @@ test.describe('Chaos HMAC — replay et tampering', () => {
       plan: 'free',
     });
     const oldTs = (Date.now() - 6 * 60 * 1000).toString();
-    const oldSig = crypto.createHmac('sha256', HUB_API_SECRET).update(`${oldTs}.${body}`).digest('hex');
 
     const res = await fetch(`${NOTIFUSE_URL}/api/tenants/provision`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Veridian-Hub-Signature': oldSig,
-        'X-Veridian-Timestamp': oldTs,
+        ...signHubV2(HUB_API_SECRET, 'POST', `${NOTIFUSE_URL}/api/tenants/provision`, body, { timestamp: oldTs }),
       },
       body,
     });
@@ -151,15 +130,13 @@ test.describe('Chaos HMAC — replay et tampering', () => {
       owner_email: 't@chaos.test',
       plan: 'free',
     });
-    const { timestamp, signature } = signHMAC(body);
     const tamperedBody = body.replace('"plan":"free"', '"plan":"enterprise"');
 
     const res = await fetch(`${NOTIFUSE_URL}/api/tenants/provision`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Veridian-Hub-Signature': signature,
-        'X-Veridian-Timestamp': timestamp,
+        ...signHubV2(HUB_API_SECRET, 'POST', `${NOTIFUSE_URL}/api/tenants/provision`, body),
       },
       body: tamperedBody,
     });
@@ -212,13 +189,11 @@ test.describe('Chaos HMAC — replay et tampering', () => {
       owner_email: 'h@chaos.test',
       workspace_name: huge,
     });
-    const { timestamp, signature } = signHMAC(body);
     const res = await fetch(`${NOTIFUSE_URL}/api/tenants/provision`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Veridian-Hub-Signature': signature,
-        'X-Veridian-Timestamp': timestamp,
+        ...signHubV2(HUB_API_SECRET, 'POST', `${NOTIFUSE_URL}/api/tenants/provision`, body),
       },
       body,
     });
@@ -228,13 +203,11 @@ test.describe('Chaos HMAC — replay et tampering', () => {
 
   test('body vide POST → 400 ou 401 (signature de body vide doit matcher)', async () => {
     // Signature pour body vide doit etre coherente
-    const { timestamp, signature } = signHMAC('');
     const res = await fetch(`${NOTIFUSE_URL}/api/tenants/provision`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Veridian-Hub-Signature': signature,
-        'X-Veridian-Timestamp': timestamp,
+        ...signHubV2(HUB_API_SECRET, 'POST', `${NOTIFUSE_URL}/api/tenants/provision`, ''),
       },
     });
     // Body vide → handler doit retourner 400 (pas crash 500)
@@ -243,13 +216,11 @@ test.describe('Chaos HMAC — replay et tampering', () => {
 
   test('JSON invalide → 400', async () => {
     const body = '{not really json';
-    const { timestamp, signature } = signHMAC(body);
     const res = await fetch(`${NOTIFUSE_URL}/api/tenants/provision`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Veridian-Hub-Signature': signature,
-        'X-Veridian-Timestamp': timestamp,
+        ...signHubV2(HUB_API_SECRET, 'POST', `${NOTIFUSE_URL}/api/tenants/provision`, body),
       },
       body,
     });

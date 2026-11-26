@@ -167,3 +167,8 @@ pour la créer en miroir.
   sortie d'erreur du job notifuse (Loki). Zéro ligne sur 24 h, en prod, alors la bascule est sûre ; sinon l'agent nommé est
   l'appelant à passer en v2 (`SignVeridianHubRequest`, ou `hmac_headers` de la CLI).
 - L'exemption du rate-limit global (fiche 44) vérifie la signature (v1 ou v2) sans la consommer.
+- **E2E** (26/11/2026) : `tests/e2e-veridian/hub-signature.ts` est le SEUL signeur des E2E (`signHubV2`, `hubFetch`, `hubClient`),
+  vérifié contre des vecteurs produits par le Go (`fixtures/hub-hmac-v2-vectors.json`, régénérés par
+  `go test ./internal/http/middleware/ -run VecteursV2 -args -ecrire-vecteurs-hmac`, jamais recalculés en TS). La v1 (`signHubV1`)
+  ne vit que dans `specs/hub-hmac-v1-compat.spec.ts` (`[v1-volontaire]`, hors `@prod-safe`) : à la pose de REQUIRE_V2, passer
+  `HUB_V1_STILL_ACCEPTED` à false.

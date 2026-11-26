@@ -30,7 +30,7 @@
 // Conventions Lot N : prefix `tst`, afterAll cleanup wipe.
 
 import { test, expect } from '@playwright/test';
-import * as crypto from 'crypto';
+import { hubClient } from '../hub-signature';
 import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
@@ -44,28 +44,8 @@ if (!NOTIFUSE_URL || !HUB_API_SECRET) {
 const SEED_TEMPLATE_ID = 'invitation-prospection';
 const SEED_TEMPLATE_NAME = 'Invitation Prospection';
 
-function signHMAC(body: string): { timestamp: string; signature: string } {
-  const timestamp = Date.now().toString();
-  const signature = crypto
-    .createHmac('sha256', HUB_API_SECRET)
-    .update(`${timestamp}.${body}`)
-    .digest('hex');
-  return { timestamp, signature };
-}
-
-async function hmacFetch(path: string, method: string, body: object | null = null) {
-  const rawBody = body ? JSON.stringify(body) : '';
-  const { timestamp, signature } = signHMAC(rawBody);
-  return fetch(`${NOTIFUSE_URL}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Veridian-Hub-Signature': signature,
-      'X-Veridian-Timestamp': timestamp,
-    },
-    body: rawBody || undefined,
-  });
-}
+const hub = hubClient(NOTIFUSE_URL, HUB_API_SECRET);
+const hmacFetch = hub.hmacFetch;
 
 async function bearerFetch(path: string, apiKey: string, method = 'GET', body: object | null = null) {
   const rawBody = body ? JSON.stringify(body) : '';

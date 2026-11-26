@@ -11,7 +11,7 @@
 // Conventions Lot N : tids `tst`, afterEach cleanup, tag @regression.
 
 import { test, expect } from '@playwright/test';
-import * as crypto from 'crypto';
+import { hubClient, signHubV2 } from '../hub-signature';
 import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
@@ -21,27 +21,9 @@ if (!NOTIFUSE_URL || !HUB_API_SECRET) {
   throw new Error('NOTIFUSE_URL and HUB_API_SECRET env vars required');
 }
 
-function signHMAC(body: string, tsOverride?: string) {
-  const ts = tsOverride ?? Date.now().toString();
-  return {
-    timestamp: ts,
-    signature: crypto.createHmac('sha256', HUB_API_SECRET).update(`${ts}.${body}`).digest('hex'),
-  };
-}
-
-async function hmacFetch(path: string, method: string, body: object | null = null) {
-  const raw = body ? JSON.stringify(body) : '';
-  const { timestamp, signature } = signHMAC(raw);
-  return fetch(`${NOTIFUSE_URL}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Veridian-Hub-Signature': signature,
-      'X-Veridian-Timestamp': timestamp,
-    },
-    body: raw || undefined,
-  });
-}
+const hub = hubClient(NOTIFUSE_URL, HUB_API_SECRET);
+const hmacFetch = hub.hmacFetch;
+const hmacGetByEmail = (email: string) => hub.hmacFetch(`/api/users/by-email?email=${encodeURIComponent(email)}`, 'GET');
 
 async function provisionTenant(tenantId: string, ownerEmail: string, plan = 'free') {
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -137,14 +119,12 @@ test.describe('@regression discovery-by-email — POST /api/users/by-email', () 
   test('HMAC invalide : 401', async () => {
     const raw = JSON.stringify({ email: 'whatever@discovery.test' });
     const ts = Date.now().toString();
-    const wrongSig = crypto.createHmac('sha256', 'WRONG_SECRET').update(`${ts}.${raw}`).digest('hex');
 
     const r = await fetch(`${NOTIFUSE_URL}/api/users/by-email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Veridian-Hub-Signature': wrongSig,
-        'X-Veridian-Timestamp': ts,
+        ...signHubV2('WRONG_SECRET', 'POST', `${NOTIFUSE_URL}/api/users/by-email`, raw, { timestamp: ts }),
       },
       body: raw,
     });
@@ -166,14 +146,12 @@ test.describe('@regression discovery-by-email — POST /api/users/by-email', () 
   test('HMAC drift > 5min : 401', async () => {
     const raw = JSON.stringify({ email: 'whatever@discovery.test' });
     const stale = (Date.now() - 10 * 60 * 1000).toString();
-    const sig = crypto.createHmac('sha256', HUB_API_SECRET).update(`${stale}.${raw}`).digest('hex');
 
     const r = await fetch(`${NOTIFUSE_URL}/api/users/by-email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Veridian-Hub-Signature': sig,
-        'X-Veridian-Timestamp': stale,
+        ...signHubV2(HUB_API_SECRET, 'POST', `${NOTIFUSE_URL}/api/users/by-email`, raw, { timestamp: stale }),
       },
       body: raw,
     });
@@ -192,26 +170,6 @@ test.describe('@regression discovery-by-email — POST /api/users/by-email', () 
 //
 // Signature HMAC GET : body vide → `HMAC(${ts}.)`. Pixel-parfait avec
 // `signGet()` cote Hub (veridian-hub/lib/sync/discovery.ts:110).
-
-function signHMACGet(tsOverride?: string) {
-  const ts = tsOverride ?? Date.now().toString();
-  return {
-    timestamp: ts,
-    signature: crypto.createHmac('sha256', HUB_API_SECRET).update(`${ts}.`).digest('hex'),
-  };
-}
-
-async function hmacGetByEmail(email: string) {
-  const { timestamp, signature } = signHMACGet();
-  const url = `${NOTIFUSE_URL}/api/users/by-email?email=${encodeURIComponent(email)}`;
-  return fetch(url, {
-    method: 'GET',
-    headers: {
-      'X-Veridian-Hub-Signature': signature,
-      'X-Veridian-Timestamp': timestamp,
-    },
-  });
-}
 
 test.describe('@regression discovery-by-email — GET /api/users/by-email (Hub reconcile client)', () => {
   test('user existant : 200 body NON vide + found:true + workspaces', async () => {
@@ -259,12 +217,10 @@ test.describe('@regression discovery-by-email — GET /api/users/by-email (Hub r
   });
 
   test('email query manquant : 400', async () => {
-    const { timestamp, signature } = signHMACGet();
     const r = await fetch(`${NOTIFUSE_URL}/api/users/by-email`, {
       method: 'GET',
       headers: {
-        'X-Veridian-Hub-Signature': signature,
-        'X-Veridian-Timestamp': timestamp,
+        ...signHubV2(HUB_API_SECRET, 'GET', `${NOTIFUSE_URL}/api/users/by-email`, ''),
       },
     });
     const raw = await r.text();

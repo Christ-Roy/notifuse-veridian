@@ -1,4 +1,4 @@
-import * as crypto from 'crypto'
+import { signHubV2 } from './hub-signature'
 import { prodResidueTeardown } from './prod-residue'
 
 // globalTeardown Playwright — filet de sécurité anti-accumulation de bases de test.
@@ -24,15 +24,13 @@ async function globalTeardown() {
   }
   try {
     const body = JSON.stringify({ dry_run: false })
-    const ts = Date.now().toString()
-    const signature = crypto.createHmac('sha256', HUB_API_SECRET).update(`${ts}.${body}`).digest('hex')
-    const r = await fetch(`${NOTIFUSE_URL}/api/veridian/admin/gc-orphan-workspace-dbs`, {
+    const gcUrl = `${NOTIFUSE_URL}/api/veridian/admin/gc-orphan-workspace-dbs`
+    const r = await fetch(gcUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-veridian-app': 'notifuse',
-        'X-Veridian-Hub-Signature': signature,
-        'X-Veridian-Timestamp': ts,
+        ...signHubV2(HUB_API_SECRET, 'POST', gcUrl, body),
       },
       body,
     })

@@ -22,7 +22,7 @@
 // endpoints HMAC freeze/unfreeze cote contrat Hub.
 
 import { test, expect } from '@playwright/test';
-import * as crypto from 'crypto';
+import { hubClient, signHubV2 } from '../hub-signature';
 import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
@@ -34,27 +34,8 @@ if (!NOTIFUSE_URL || !HUB_API_SECRET) {
 
 // === HMAC helpers ===========================================================
 
-function signHMAC(body: string, tsOverride?: string) {
-  const ts = tsOverride ?? Date.now().toString();
-  return {
-    timestamp: ts,
-    signature: crypto.createHmac('sha256', HUB_API_SECRET).update(`${ts}.${body}`).digest('hex'),
-  };
-}
-
-async function hmacFetch(path: string, method: string, body: object | null = null) {
-  const raw = body ? JSON.stringify(body) : '';
-  const { timestamp, signature } = signHMAC(raw);
-  return fetch(`${NOTIFUSE_URL}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Veridian-Hub-Signature': signature,
-      'X-Veridian-Timestamp': timestamp,
-    },
-    body: raw || undefined,
-  });
-}
+const hub = hubClient(NOTIFUSE_URL, HUB_API_SECRET);
+const hmacFetch = hub.hmacFetch;
 
 // readBody lit le body UNE seule fois en string et retourne {raw, json}.
 // Le body fetch est un stream non-rewindable : appeler r.text() puis r.json()
@@ -234,14 +215,12 @@ test.describe('@regression freeze-member — POST /api/tenants/{tenantId}/freeze
       reason: 'manual',
     });
     const ts = Date.now().toString();
-    const badSig = crypto.createHmac('sha256', 'wrong-secret-32-bytes-ahahahaha').update(`${ts}.${body}`).digest('hex');
 
     const r = await fetch(`${NOTIFUSE_URL}/api/tenants/${tid}/freeze-member`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Veridian-Hub-Signature': badSig,
-        'X-Veridian-Timestamp': ts,
+        ...signHubV2('still-wrong-secret-padding', 'POST', `${NOTIFUSE_URL}/api/tenants/${tid}/freeze-member`, body, { timestamp: ts }),
       },
       body,
     });
@@ -309,14 +288,12 @@ test.describe('@regression unfreeze-member — POST /api/tenants/{tenantId}/unfr
       hub_user_id: hubId('u-1'),
     });
     const ts = Date.now().toString();
-    const badSig = crypto.createHmac('sha256', 'still-wrong-secret-padding').update(`${ts}.${body}`).digest('hex');
 
     const r = await fetch(`${NOTIFUSE_URL}/api/tenants/${tid}/unfreeze-member`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Veridian-Hub-Signature': badSig,
-        'X-Veridian-Timestamp': ts,
+        ...signHubV2('still-wrong-secret-padding', 'POST', `${NOTIFUSE_URL}/api/tenants/${tid}/unfreeze-member`, body, { timestamp: ts }),
       },
       body,
     });

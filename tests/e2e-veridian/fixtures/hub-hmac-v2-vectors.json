@@ -1,0 +1,38 @@
+[
+  {
+    "name": "post-json",
+    "secret": "vector-secret",
+    "timestamp": "1790000000000",
+    "method": "POST",
+    "url": "https://notifuse.example/api/tenants/provision",
+    "body": "{\"tenant_id\":\"e2e1\",\"owner_email\":\"a@b.test\"}",
+    "signature": "1833d07f67fc0c2920913ecf43d122de88a911c30638c34cd4cf56b76739f3f4"
+  },
+  {
+    "name": "get-query-encodee",
+    "secret": "vector-secret",
+    "timestamp": "1790000000001",
+    "method": "GET",
+    "url": "https://notifuse.example/api/users/by-email?email=a%2Bb%40x.test\u0026z=1",
+    "body": "",
+    "signature": "c5a49d64bff306a3e7669a95c724d674f7a4b90372afed2fc418cb41350c12ea"
+  },
+  {
+    "name": "delete-chemin-encode",
+    "secret": "vector-secret",
+    "timestamp": "1790000000002",
+    "method": "DELETE",
+    "url": "https://notifuse.example/api/tenants/a%20b%C3%A9/x",
+    "body": "",
+    "signature": "e330596c25a3953e3ab558b296395052bb832f8cc8b5d17199d6afff24ca7719"
+  },
+  {
+    "name": "methode-minuscule-corps-accentue",
+    "secret": "autre-secret",
+    "timestamp": "1790000000003",
+    "method": "post",
+    "url": "http://127.0.0.1:8080/api/veridian/admin/cache/invalidate?a=1",
+    "body": "{\"n\":\"é\"}",
+    "signature": "59bb887ed3e49a618f9f456529fdac297cc190877542d91c9f5653de1e140696"
+  }
+]

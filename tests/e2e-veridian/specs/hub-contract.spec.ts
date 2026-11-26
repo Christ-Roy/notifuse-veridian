@@ -16,7 +16,7 @@
 // le Hub ne peut pas mettre à jour son client Notifuse — le contrat est cassé.
 
 import { test, expect } from '@playwright/test';
-import * as crypto from 'crypto';
+import { hubClient } from '../hub-signature';
 import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
@@ -26,25 +26,8 @@ if (!NOTIFUSE_URL || !HUB_API_SECRET) {
   throw new Error('NOTIFUSE_URL and HUB_API_SECRET env vars required');
 }
 
-function signHMAC(body: string) {
-  const ts = Date.now().toString();
-  const signature = crypto.createHmac('sha256', HUB_API_SECRET).update(`${ts}.${body}`).digest('hex');
-  return { timestamp: ts, signature };
-}
-
-async function hmacFetch(path: string, method: string, body: object | null = null) {
-  const rawBody = body ? JSON.stringify(body) : '';
-  const { timestamp, signature } = signHMAC(rawBody);
-  return fetch(`${NOTIFUSE_URL}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Veridian-Hub-Signature': signature,
-      'X-Veridian-Timestamp': timestamp,
-    },
-    body: rawBody || undefined,
-  });
-}
+const hub = hubClient(NOTIFUSE_URL, HUB_API_SECRET);
+const hmacFetch = hub.hmacFetch;
 
 async function bearerFetch(path: string, method: string, apiKey: string, body: object | null = null) {
   return fetch(`${NOTIFUSE_URL}${path}`, {

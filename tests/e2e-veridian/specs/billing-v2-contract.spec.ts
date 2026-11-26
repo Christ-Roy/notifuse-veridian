@@ -31,7 +31,7 @@
 
 import { test, expect } from '@playwright/test';
 import { hubId } from '../hub-id';
-import * as crypto from 'crypto';
+import { hubClient, signHubV2 } from '../hub-signature';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
 const HUB_API_SECRET = process.env.HUB_API_SECRET!;
@@ -40,26 +40,8 @@ if (!NOTIFUSE_URL || !HUB_API_SECRET) {
   throw new Error('NOTIFUSE_URL and HUB_API_SECRET env vars required');
 }
 
-function signHMAC(body: string) {
-  const ts = Date.now().toString();
-  const signature = crypto.createHmac('sha256', HUB_API_SECRET).update(`${ts}.${body}`).digest('hex');
-  return { timestamp: ts, signature };
-}
-
-async function hmacFetch(path: string, method: string, body: object | null = null, extraHeaders: Record<string, string> = {}) {
-  const rawBody = body ? JSON.stringify(body) : '';
-  const { timestamp, signature } = signHMAC(rawBody);
-  return fetch(`${NOTIFUSE_URL}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Veridian-Hub-Signature': signature,
-      'X-Veridian-Timestamp': timestamp,
-      ...extraHeaders,
-    },
-    body: rawBody || undefined,
-  });
-}
+const hub = hubClient(NOTIFUSE_URL, HUB_API_SECRET);
+const hmacFetch = hub.hmacFetch;
 
 // Provision avec retry (404 + 5xx transient — cf pattern chaos-status-and-plan).
 async function provisionTenant(tid: string, opts: { plan?: string; plan_source?: string } = {}) {
@@ -751,13 +733,11 @@ test.describe('@regression Erreurs structurelles update-plan', () => {
   test('body JSON invalide → 400 invalid_payload', async () => {
     const ts = Date.now().toString();
     const rawBody = '{not json';
-    const signature = crypto.createHmac('sha256', HUB_API_SECRET).update(`${ts}.${rawBody}`).digest('hex');
     const r = await fetch(`${NOTIFUSE_URL}/api/tenants/update-plan`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Veridian-Hub-Signature': signature,
-        'X-Veridian-Timestamp': ts,
+        ...signHubV2(HUB_API_SECRET, 'POST', `${NOTIFUSE_URL}/api/tenants/update-plan`, rawBody, { timestamp: ts }),
       },
       body: rawBody,
     });

@@ -25,7 +25,7 @@
 // test.skip si env absent.
 
 import { test, expect } from '@playwright/test';
-import * as crypto from 'crypto';
+import { hubClient, signHubV2, verifyNotifuseWebhookSignature } from '../hub-signature';
 import { hubId } from '../hub-id';
 import * as http from 'http';
 
@@ -40,27 +40,8 @@ if (!NOTIFUSE_URL || !HUB_API_SECRET) {
 
 // === HMAC helpers ==========================================================
 
-function signHMAC(body: string, tsOverride?: string) {
-  const ts = tsOverride ?? Date.now().toString();
-  return {
-    timestamp: ts,
-    signature: crypto.createHmac('sha256', HUB_API_SECRET).update(`${ts}.${body}`).digest('hex'),
-  };
-}
-
-async function hmacFetch(path: string, method: string, body: object | null = null) {
-  const raw = body ? JSON.stringify(body) : '';
-  const { timestamp, signature } = signHMAC(raw);
-  return fetch(`${NOTIFUSE_URL}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Veridian-Hub-Signature': signature,
-      'X-Veridian-Timestamp': timestamp,
-    },
-    body: raw || undefined,
-  });
-}
+const hub = hubClient(NOTIFUSE_URL, HUB_API_SECRET);
+const hmacFetch = hub.hmacFetch;
 
 async function provisionTenant(tenantId: string, plan = 'free') {
   const ownerEmail = `${tenantId}@membership.test`;
@@ -310,13 +291,11 @@ test.describe('@regression sync-member — POST /api/tenants/{id}/sync-member (�
       role: 'member',
     });
     const ts = Date.now().toString();
-    const wrongSig = crypto.createHmac('sha256', 'WRONG_SECRET').update(`${ts}.${raw}`).digest('hex');
     const r = await fetch(`${NOTIFUSE_URL}/api/tenants/${tid}/sync-member`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Veridian-Hub-Signature': wrongSig,
-        'X-Veridian-Timestamp': ts,
+        ...signHubV2('WRONG_SECRET', 'POST', `${NOTIFUSE_URL}/api/tenants/${tid}/sync-member`, raw, { timestamp: ts }),
       },
       body: raw,
     });
@@ -425,13 +404,11 @@ test.describe('@regression remove-member — POST /api/tenants/{id}/remove-membe
 
     const raw = JSON.stringify({ user_email: 'x@membership.test' });
     const ts = Date.now().toString();
-    const wrongSig = crypto.createHmac('sha256', 'WRONG_SECRET').update(`${ts}.${raw}`).digest('hex');
     const r = await fetch(`${NOTIFUSE_URL}/api/tenants/${tid}/remove-member`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Veridian-Hub-Signature': wrongSig,
-        'X-Veridian-Timestamp': ts,
+        ...signHubV2('WRONG_SECRET', 'POST', `${NOTIFUSE_URL}/api/tenants/${tid}/remove-member`, raw, { timestamp: ts }),
       },
       body: raw,
     });
@@ -560,13 +537,11 @@ test.describe('@regression restore-member — POST /api/tenants/{id}/restore-mem
 
     const raw = JSON.stringify({ user_email: 'x@membership.test' });
     const ts = Date.now().toString();
-    const wrongSig = crypto.createHmac('sha256', 'WRONG_SECRET').update(`${ts}.${raw}`).digest('hex');
     const r = await fetch(`${NOTIFUSE_URL}/api/tenants/${tid}/restore-member`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Veridian-Hub-Signature': wrongSig,
-        'X-Veridian-Timestamp': ts,
+        ...signHubV2('WRONG_SECRET', 'POST', `${NOTIFUSE_URL}/api/tenants/${tid}/restore-member`, raw, { timestamp: ts }),
       },
       body: raw,
     });
@@ -694,13 +669,11 @@ test.describe('@regression attach-member alias workspace-level — POST /api/ver
       role: 'member',
     });
     const ts = Date.now().toString();
-    const wrongSig = crypto.createHmac('sha256', 'WRONG_SECRET').update(`${ts}.${raw}`).digest('hex');
     const r = await fetch(`${NOTIFUSE_URL}/api/veridian/workspaces/${tid}/attach-member`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Veridian-Hub-Signature': wrongSig,
-        'X-Veridian-Timestamp': ts,
+        ...signHubV2('WRONG_SECRET', 'POST', `${NOTIFUSE_URL}/api/veridian/workspaces/${tid}/attach-member`, raw, { timestamp: ts }),
       },
       body: raw,
     });
@@ -741,11 +714,7 @@ function startMockReceiver(): Promise<{ port: number }> {
           const sigReceived = req.headers['x-veridian-notifuse-signature'] as string;
           let sigValid = false;
           if (MOCK_WEBHOOK_SECRET && ts && sigReceived) {
-            const expected = crypto
-              .createHmac('sha256', MOCK_WEBHOOK_SECRET)
-              .update(`${ts}.${raw}`)
-              .digest('hex');
-            sigValid = expected === sigReceived;
+            sigValid = verifyNotifuseWebhookSignature(MOCK_WEBHOOK_SECRET, ts, raw, sigReceived);
           }
           const parsed = JSON.parse(raw);
           receivedWebhooks.push({

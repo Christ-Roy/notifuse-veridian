@@ -24,7 +24,7 @@
 // le job e2e-prod apres chaque promote (cf canary-witness.spec.ts entete).
 
 import { test, expect } from '@playwright/test';
-import * as crypto from 'crypto';
+import { hubClient } from '../../hub-signature';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
 const HUB_API_SECRET = process.env.HUB_API_SECRET!;
@@ -33,24 +33,9 @@ if (!NOTIFUSE_URL || !HUB_API_SECRET) {
   throw new Error('NOTIFUSE_URL and HUB_API_SECRET env vars required');
 }
 
-function signHMACGet() {
-  const ts = Date.now().toString();
-  return {
-    timestamp: ts,
-    signature: crypto.createHmac('sha256', HUB_API_SECRET).update(`${ts}.`).digest('hex'),
-  };
-}
-
-async function hmacGet(path: string) {
-  const { timestamp, signature } = signHMACGet();
-  return fetch(`${NOTIFUSE_URL}${path}`, {
-    method: 'GET',
-    headers: {
-      'X-Veridian-Hub-Signature': signature,
-      'X-Veridian-Timestamp': timestamp,
-    },
-  });
-}
+const hub = hubClient(NOTIFUSE_URL, HUB_API_SECRET);
+const hmacFetch = hub.hmacFetch;
+const hmacGet = (path: string) => hub.hmacFetch(path, 'GET');
 
 async function readBody(r: Response): Promise<{ raw: string; json: () => any }> {
   const raw = await r.text();

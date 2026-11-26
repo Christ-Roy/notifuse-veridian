@@ -24,7 +24,7 @@
 // Conventions : tids `mega04-<RUN_STAMP>-<slug>`, afterEach wipe.
 
 import { test, expect } from '@playwright/test';
-import * as crypto from 'crypto';
+import { hubClient, signHubV2 } from '../../hub-signature';
 import { hubId } from '../../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
@@ -38,49 +38,10 @@ const RUN_STAMP = Date.now().toString(36).slice(-6);
 
 // === HMAC helpers ===========================================================
 
-function signHMACPost(body: string, tsOverride?: string) {
-  const ts = tsOverride ?? Date.now().toString();
-  return {
-    timestamp: ts,
-    signature: crypto.createHmac('sha256', HUB_API_SECRET).update(`${ts}.${body}`).digest('hex'),
-  };
-}
-
-function signHMACGet(tsOverride?: string) {
-  // Canonical GET cote Hub : `${ts}.` (body vide, mais le `.` reste).
-  // Pixel-parfait avec veridian-hub/lib/sync/discovery.ts:110 signGet().
-  const ts = tsOverride ?? Date.now().toString();
-  return {
-    timestamp: ts,
-    signature: crypto.createHmac('sha256', HUB_API_SECRET).update(`${ts}.`).digest('hex'),
-  };
-}
-
-async function hmacFetchPost(path: string, body: object | null = null) {
-  const raw = body ? JSON.stringify(body) : '';
-  const { timestamp, signature } = signHMACPost(raw);
-  return fetch(`${NOTIFUSE_URL}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Veridian-Hub-Signature': signature,
-      'X-Veridian-Timestamp': timestamp,
-    },
-    body: raw || undefined,
-  });
-}
-
-async function hmacGetByEmail(email: string) {
-  const { timestamp, signature } = signHMACGet();
-  const url = `${NOTIFUSE_URL}/api/users/by-email?email=${encodeURIComponent(email)}`;
-  return fetch(url, {
-    method: 'GET',
-    headers: {
-      'X-Veridian-Hub-Signature': signature,
-      'X-Veridian-Timestamp': timestamp,
-    },
-  });
-}
+const hub = hubClient(NOTIFUSE_URL, HUB_API_SECRET);
+const hmacFetch = hub.hmacFetch;
+const hmacGetByEmail = (email: string) => hub.hmacFetch(`/api/users/by-email?email=${encodeURIComponent(email)}`, 'GET');
+const hmacFetchPost = (path: string, body: object | null = null) => hub.hmacFetch(path, 'POST', body);
 
 async function readBody(r: Response): Promise<{ raw: string; json: () => any }> {
   const raw = await r.text();
@@ -207,25 +168,21 @@ test.describe('@mega @regression MEGA-04 — cross-app discovery POST/GET roundt
   test('HMAC wrong secret : POST + GET refusent symetriques (401/403)', async () => {
     const raw = JSON.stringify({ email: 'whatever@e2e.veridian.site' });
     const ts = Date.now().toString();
-    const wrongSig = crypto.createHmac('sha256', 'WRONG_SECRET').update(`${ts}.${raw}`).digest('hex');
 
     const post = await fetch(`${NOTIFUSE_URL}/api/users/by-email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Veridian-Hub-Signature': wrongSig,
-        'X-Veridian-Timestamp': ts,
+        ...signHubV2('WRONG_SECRET', 'POST', `${NOTIFUSE_URL}/api/users/by-email`, raw, { timestamp: ts }),
       },
       body: raw,
     });
     expect([401, 403], `POST wrong secret got ${post.status}`).toContain(post.status);
 
-    const wrongSigGet = crypto.createHmac('sha256', 'WRONG_SECRET').update(`${ts}.`).digest('hex');
     const get = await fetch(`${NOTIFUSE_URL}/api/users/by-email?email=whatever@e2e.veridian.site`, {
       method: 'GET',
       headers: {
-        'X-Veridian-Hub-Signature': wrongSigGet,
-        'X-Veridian-Timestamp': ts,
+        ...signHubV2('WRONG_SECRET', 'GET', `${NOTIFUSE_URL}/api/users/by-email?email=whatever@e2e.veridian.site`, '', { timestamp: ts }),
       },
     });
     expect([401, 403], `GET wrong secret got ${get.status}`).toContain(get.status);
@@ -235,24 +192,20 @@ test.describe('@mega @regression MEGA-04 — cross-app discovery POST/GET roundt
     const stale = (Date.now() - 10 * 60 * 1000).toString();
 
     const raw = JSON.stringify({ email: 'stale@e2e.veridian.site' });
-    const sigPost = crypto.createHmac('sha256', HUB_API_SECRET).update(`${stale}.${raw}`).digest('hex');
     const post = await fetch(`${NOTIFUSE_URL}/api/users/by-email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Veridian-Hub-Signature': sigPost,
-        'X-Veridian-Timestamp': stale,
+        ...signHubV2(HUB_API_SECRET, 'POST', `${NOTIFUSE_URL}/api/users/by-email`, raw, { timestamp: stale }),
       },
       body: raw,
     });
     expect([401, 403], `POST stale ts got ${post.status}`).toContain(post.status);
 
-    const sigGet = crypto.createHmac('sha256', HUB_API_SECRET).update(`${stale}.`).digest('hex');
     const get = await fetch(`${NOTIFUSE_URL}/api/users/by-email?email=stale@e2e.veridian.site`, {
       method: 'GET',
       headers: {
-        'X-Veridian-Hub-Signature': sigGet,
-        'X-Veridian-Timestamp': stale,
+        ...signHubV2(HUB_API_SECRET, 'GET', `${NOTIFUSE_URL}/api/users/by-email?email=stale@e2e.veridian.site`, '', { timestamp: stale }),
       },
     });
     expect([401, 403], `GET stale ts got ${get.status}`).toContain(get.status);
@@ -270,12 +223,10 @@ test.describe('@mega @regression MEGA-04 — cross-app discovery POST/GET roundt
     expect(post2.status, pb2.raw).toBe(400);
 
     // GET sans email query
-    const { timestamp, signature } = signHMACGet();
     const get = await fetch(`${NOTIFUSE_URL}/api/users/by-email`, {
       method: 'GET',
       headers: {
-        'X-Veridian-Hub-Signature': signature,
-        'X-Veridian-Timestamp': timestamp,
+        ...signHubV2(HUB_API_SECRET, 'GET', `${NOTIFUSE_URL}/api/users/by-email`, ''),
       },
     });
     const gb = await readBody(get);

@@ -9,7 +9,7 @@
 // prefix `idempot`). Tournent uniquement en staging.
 
 import { test, expect } from '@playwright/test';
-import * as crypto from 'crypto';
+import { hubClient } from '../hub-signature';
 import { hubId } from '../hub-id';
 
 const NOTIFUSE_URL = process.env.NOTIFUSE_URL!;
@@ -19,24 +19,8 @@ if (!NOTIFUSE_URL || !HUB_API_SECRET) {
   throw new Error('NOTIFUSE_URL and HUB_API_SECRET env vars required');
 }
 
-function signHMAC(body: string, secret = HUB_API_SECRET, ts = Date.now().toString()) {
-  const signature = crypto.createHmac('sha256', secret).update(`${ts}.${body}`).digest('hex');
-  return { timestamp: ts, signature };
-}
-
-async function hmacFetch(path: string, method: string, body: object | null = null) {
-  const rawBody = body ? JSON.stringify(body) : '';
-  const { timestamp, signature } = signHMAC(rawBody);
-  return fetch(`${NOTIFUSE_URL}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Veridian-Hub-Signature': signature,
-      'X-Veridian-Timestamp': timestamp,
-    },
-    body: rawBody || undefined,
-  });
-}
+const hub = hubClient(NOTIFUSE_URL, HUB_API_SECRET);
+const hmacFetch = hub.hmacFetch;
 
 // === Veridian patch 2026-05-21 (Lot N étape 1+2) ===
 // Prefix unifié `tst` + cleanup afterEach au fil de l'eau.
