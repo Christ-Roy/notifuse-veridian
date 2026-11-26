@@ -131,6 +131,9 @@ func WriteJSONErrorCode(w http.ResponseWriter, code, message string, statusCode 
 // vraie panne — ce correctif branche ces call sites sur la MEME
 // classification que les routes app, sans dupliquer la logique.
 func WriteAuthAwareErrorCode(w http.ResponseWriter, err error, fallbackCode, fallbackMessage string, fallbackStatus int, details map[string]interface{}) {
+	if veridianWriteConflict(w, err) {
+		return
+	}
 	if message, status, ok := classifyAuthError(err); ok {
 		code := ErrCodeForbidden
 		if status == http.StatusUnauthorized {

@@ -290,3 +290,13 @@ func TestWriteAuthAwareErrorCode(t *testing.T) {
 		assert.Equal(t, "fallback message", response.Error)
 	})
 }
+
+// La forme codée (routes veridian/*) classe aussi le doublon en 409 already_exists, avant son repli.
+func TestWriteAuthAwareErrorCode_DoublonEn409(t *testing.T) {
+	rec := httptest.NewRecorder()
+	WriteAuthAwareErrorCode(rec, wrappedUnique("templates"), ErrCodeInternalError, "boom", http.StatusInternalServerError, nil)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	var body VeridianErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	assert.Equal(t, ErrCodeAlreadyExists, body.Code)
+}

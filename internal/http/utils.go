@@ -39,6 +39,9 @@ func WriteJSONError(w http.ResponseWriter, message string, statusCode int) {
 // partout où un handler appelle ce chemin, sans toucher 46 fichiers à la
 // main.
 func WriteAuthAwareError(w http.ResponseWriter, err error, fallbackMessage string, fallbackStatus int) {
+	if veridianWriteConflict(w, err) { // Veridian : id déjà pris = 409 already_exists, jamais un 500 (veridian_conflict_error.go)
+		return
+	}
 	if code, status, ok := classifyAuthError(err); ok {
 		WriteJSONError(w, code, status)
 		return

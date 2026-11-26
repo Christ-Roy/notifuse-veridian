@@ -235,3 +235,16 @@ func (f *failingResponseWriter) WriteHeader(statusCode int) {
 	f.status = statusCode
 	f.ResponseWriter.WriteHeader(statusCode)
 }
+
+// Un id déjà pris sort en 409 already_exists ; une vraie panne garde le statut du handler (500).
+func TestWriteAuthAwareError_DoublonEn409(t *testing.T) {
+	rec := httptest.NewRecorder()
+	WriteAuthAwareError(rec, wrappedUnique("lists"), "Failed to create list", http.StatusInternalServerError)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"code":"already_exists"`)
+
+	rec = httptest.NewRecorder()
+	WriteAuthAwareError(rec, errors.New("db down"), "Failed to create list", http.StatusInternalServerError)
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Contains(t, rec.Body.String(), "Failed to create list")
+}
