@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/netip"
 	"time"
 )
 
@@ -68,13 +69,14 @@ func readProxyHeader(c net.Conn) (net.Addr, error) {
 // proxyListener lit l'en-tête de chaque connexion hors de la boucle d'acceptation : un client lent ne bloque pas les autres.
 type proxyListener struct {
 	net.Listener
-	out  chan net.Conn
-	err  chan error
-	done chan struct{}
+	out     chan net.Conn
+	err     chan error
+	done    chan struct{}
+	trusted []netip.Prefix // sources admises à annoncer une adresse ; vide : toutes (historique)
 }
 
-func newProxyListener(ln net.Listener) *proxyListener {
-	l := &proxyListener{Listener: ln, out: make(chan net.Conn), err: make(chan error, 1), done: make(chan struct{})}
+func newProxyListener(ln net.Listener, trusted []netip.Prefix) *proxyListener {
+	l := &proxyListener{Listener: ln, out: make(chan net.Conn), err: make(chan error, 1), done: make(chan struct{}), trusted: trusted}
 	go l.loop()
 	return l
 }
@@ -88,6 +90,12 @@ func (l *proxyListener) loop() {
 			return
 		}
 		go func() {
+			// Un en-tête PROXY ne vaut que venant de l'entrée publique : de toute autre source il est une adresse choisie par le
+			// client, donc un compteur d'essais neuf à volonté. La connexion est coupée avant de lire un octet.
+			if !trusted(l.trusted, c.RemoteAddr()) {
+				_ = c.Close()
+				return
+			}
 			a, err := readProxyHeader(c)
 			if err != nil {
 				_ = c.Close()
@@ -111,5 +119,11 @@ func (l *proxyListener) Accept() (net.Conn, error) {
 	}
 }
 
-// ProxyListener lit l'en-tête PROXY v2 de chaque connexion (partagé avec le récepteur de courrier).
-func ProxyListener(ln net.Listener) net.Listener { return newProxyListener(ln) }
+// ProxyListener lit l'en-tête PROXY v2 de chaque connexion, de n'importe quelle source (partagé avec le récepteur de courrier).
+func ProxyListener(ln net.Listener) net.Listener { return newProxyListener(ln, nil) }
+
+// ProxyListenerTrusted : comme ProxyListener, mais l'en-tête n'est admis que des sources listées ; les autres sont coupées. Liste vide :
+// toutes les sources, comme ProxyListener (l'appelant le journalise au démarrage).
+func ProxyListenerTrusted(ln net.Listener, trustedProxies []netip.Prefix) net.Listener {
+	return newProxyListener(ln, trustedProxies)
+}

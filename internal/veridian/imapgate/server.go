@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -66,6 +67,11 @@ type Config struct {
 	BehindTLSProxy bool
 	// ProxyProtocol : l'entrée publique annonce l'adresse du client (PROXY v2) ; une connexion sans en-tête est coupée.
 	ProxyProtocol bool
+	// TrustedProxies : seules sources admises à envoyer l'en-tête PROXY v2 (les autres sont coupées). Vide : toutes, comportement
+	// historique (l'appelant l'annonce au démarrage).
+	TrustedProxies []netip.Prefix
+	// MaxConnsPerIP : connexions simultanées par adresse cliente (IPv6 au /64), 0 = pas de borne par adresse.
+	MaxConnsPerIP int
 	Auth          Authenticator
 	Boxes         Boxes
 	Limiter       Limiter
@@ -109,8 +115,9 @@ func New(cfg Config) (*Server, error) {
 // Serve sert l'écoute donnée (TLS posé ici si configuré) jusqu'à Close.
 func (s *Server) Serve(ln net.Listener) error {
 	if s.cfg.ProxyProtocol {
-		ln = newProxyListener(ln)
+		ln = newProxyListener(ln, s.cfg.TrustedProxies)
 	}
+	ln = LimitListener(ln, s.cfg.MaxConnsPerIP)
 	ln = &limitListener{Listener: ln, s: s}
 	if s.cfg.TLSConfig != nil {
 		ln = tls.NewListener(ln, s.cfg.TLSConfig)

@@ -418,47 +418,52 @@ func (s *session) Search(kind imapserver.NumKind, c *imap.SearchCriteria, _ *ima
 	if s.sel == nil {
 		return nil, errNotOpened
 	}
-	msgs := map[string]*mailbox.Message{}
-	if needsBody(c) {
-		from := 0
-		if len(s.list) > searchBodyMax {
-			from = len(s.list) - searchBodyMax
-		}
-		for i := from; i < len(s.list); i += fetchBatch {
-			var idx []int
-			for j := i; j < len(s.list) && j < i+fetchBatch; j++ {
-				idx = append(idx, j)
-			}
-			got, err := s.messages(idx)
-			if err != nil {
-				return nil, err
-			}
-			for id, m := range got {
-				msgs[id] = m
-			}
-		}
+	// Les messages entiers se lisent par lots et ne sont pas gardés : un lot examiné est abandonné avant de lire le suivant.
+	withBody, from := needsBody(c), 0
+	if len(s.list) > searchBodyMax {
+		from = len(s.list) - searchBodyMax
 	}
 	d := &imap.SearchData{}
 	var seqs imap.SeqSet
 	var uids imap.UIDSet
-	for i, e := range s.list {
-		if !s.match(uint32(i+1), e, msgs[e.ID], c) {
-			continue
+	for start := 0; start < len(s.list); start += fetchBatch {
+		end := start + fetchBatch
+		if end > len(s.list) {
+			end = len(s.list)
 		}
-		n := uint32(i + 1)
-		if kind == imapserver.NumKindUID {
-			n = uint32(e.uid)
-			uids.AddNum(e.uid)
-		} else {
-			seqs.AddNum(n)
+		var msgs map[string]*mailbox.Message
+		if withBody && end > from {
+			var idx []int
+			for j := start; j < end; j++ {
+				if j >= from {
+					idx = append(idx, j)
+				}
+			}
+			var err error
+			if msgs, err = s.messages(idx); err != nil {
+				return nil, err
+			}
 		}
-		if d.Min == 0 || n < d.Min {
-			d.Min = n
+		for i := start; i < end; i++ {
+			e := s.list[i]
+			if !s.match(uint32(i+1), e, msgs[e.ID], c) {
+				continue
+			}
+			n := uint32(i + 1)
+			if kind == imapserver.NumKindUID {
+				n = uint32(e.uid)
+				uids.AddNum(e.uid)
+			} else {
+				seqs.AddNum(n)
+			}
+			if d.Min == 0 || n < d.Min {
+				d.Min = n
+			}
+			if n > d.Max {
+				d.Max = n
+			}
+			d.Count++
 		}
-		if n > d.Max {
-			d.Max = n
-		}
-		d.Count++
 	}
 	if kind == imapserver.NumKindUID {
 		d.All = uids

@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -29,11 +30,15 @@ type Settings struct {
 	Port    int
 	Host    string // nom annoncé, celui du MX
 	PROXYv2 bool
+	// MaxPerIP : connexions simultanées par adresse cliente (IPv6 au /64), 0 = pas de borne. Trusted : sources admises à envoyer
+	// l'en-tête PROXY v2 (vide = toutes, avertissement au démarrage).
+	MaxPerIP int
+	Trusted  []netip.Prefix
 }
 
 // ReadSettings lit les réglages.
 func ReadSettings(get func(string) string) (Settings, error) {
-	s := Settings{Port: 2525, Host: get("VERIDIAN_MX_HOST"), PROXYv2: get("VERIDIAN_MX_PROXY_PROTOCOL") == "true"}
+	s := Settings{Port: 2525, Host: get("VERIDIAN_MX_HOST"), PROXYv2: get("VERIDIAN_MX_PROXY_PROTOCOL") == "true", MaxPerIP: imapgate.DefaultMaxConnsPerIP}
 	for _, d := range strings.Split(get("VERIDIAN_MX_DOMAINS"), ",") {
 		if d = strings.TrimSpace(d); d != "" {
 			s.Domains = append(s.Domains, d)
@@ -46,6 +51,18 @@ func ReadSettings(get func(string) string) (Settings, error) {
 		}
 		s.Port = n
 	}
+	if v := get("VERIDIAN_MX_MAX_CONNS_PER_IP"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			return s, fmt.Errorf("VERIDIAN_MX_MAX_CONNS_PER_IP invalide")
+		}
+		s.MaxPerIP = n
+	}
+	trusted, err := imapgate.ParseCIDRs(get("VERIDIAN_MX_TRUSTED_PROXIES"))
+	if err != nil {
+		return s, fmt.Errorf("VERIDIAN_MX_TRUSTED_PROXIES : %w", err)
+	}
+	s.Trusted = trusted
 	if len(s.Domains) > 0 && s.Host == "" {
 		return s, fmt.Errorf("VERIDIAN_MX_HOST requis avec VERIDIAN_MX_DOMAINS")
 	}
@@ -142,8 +159,12 @@ func start(_ context.Context, h platform.Host) error {
 		return err
 	}
 	if settings.PROXYv2 {
-		ln = imapgate.ProxyListener(ln)
+		if len(settings.Trusted) == 0 {
+			h.Logger().Warn("MX gate: VERIDIAN_MX_TRUSTED_PROXIES empty, PROXY v2 header accepted from any source")
+		}
+		ln = imapgate.ProxyListenerTrusted(ln, settings.Trusted)
 	}
+	ln = imapgate.LimitListener(ln, settings.MaxPerIP)
 	h.Logger().WithField("domains", strings.Join(settings.Domains, ",")).Info("MX gate: listening")
 	return server.Serve(ln)
 }

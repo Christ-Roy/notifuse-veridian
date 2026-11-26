@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"strconv"
 
@@ -37,12 +38,17 @@ type Settings struct {
 	// Also : autres réglages qui marchent aussi (« 443/ssl,587/starttls »), admis par le test de connexion.
 	IMAPAlso, SMTPAlso []boxapi.Way
 	Proxy              bool // TLS terminé par l'entrée publique, réseau privé jusqu'ici
+	// Plafonds de connexions simultanées par adresse cliente (IPv6 au /64), 0 = pas de borne ; sources admises à envoyer l'en-tête
+	// PROXY v2 (vide = toutes, avertissement au démarrage).
+	IMAPMaxPerIP, SMTPMaxPerIP int
+	IMAPTrusted, SMTPTrusted   []netip.Prefix
 }
 
 // ReadSettings lit les réglages. VERIDIAN_IMAP_ENABLED absent : rien n'écoute.
 func ReadSettings(get func(string) string, defaultHost string) (Settings, error) {
 	s := Settings{Enabled: get("VERIDIAN_IMAP_ENABLED") == "true", Port: 1993, Host: defaultHost, Proxy: get("VERIDIAN_IMAP_BEHIND_TLS_PROXY") == "true", PROXYv2: get("VERIDIAN_IMAP_PROXY_PROTOCOL") == "true"}
 	s.SMTPHost, s.SMTPPROXYv2 = get("VERIDIAN_BOX_SMTP_HOST"), get("VERIDIAN_BOX_SMTP_PROXY_PROTOCOL") == "true"
+	s.IMAPMaxPerIP, s.SMTPMaxPerIP = imapgate.DefaultMaxConnsPerIP, imapgate.DefaultMaxConnsPerIP
 	for name, dst := range map[string]*int{"VERIDIAN_IMAP_PORT": &s.Port, "VERIDIAN_IMAP_PUBLIC_PORT": &s.ShowPort,
 		"VERIDIAN_BOX_SMTP_PORT": &s.SMTPPort, "VERIDIAN_BOX_SMTP_PUBLIC_PORT": &s.SMTPShow, "VERIDIAN_BOX_STARTTLS_PORT": &s.STARTTLSPort} {
 		v := get(name)
@@ -54,6 +60,22 @@ func ReadSettings(get func(string) string, defaultHost string) (Settings, error)
 			return s, fmt.Errorf("%s invalide", name)
 		}
 		*dst = n
+	}
+	for name, dst := range map[string]*int{"VERIDIAN_IMAP_MAX_CONNS_PER_IP": &s.IMAPMaxPerIP, "VERIDIAN_BOX_SMTP_MAX_CONNS_PER_IP": &s.SMTPMaxPerIP} {
+		if v := get(name); v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil || n < 0 {
+				return s, fmt.Errorf("%s invalide", name)
+			}
+			*dst = n
+		}
+	}
+	for name, dst := range map[string]*[]netip.Prefix{"VERIDIAN_IMAP_TRUSTED_PROXIES": &s.IMAPTrusted, "VERIDIAN_BOX_SMTP_TRUSTED_PROXIES": &s.SMTPTrusted} {
+		l, err := imapgate.ParseCIDRs(get(name))
+		if err != nil {
+			return s, fmt.Errorf("%s : %w", name, err)
+		}
+		*dst = l
 	}
 	for name, dst := range map[string]*[]boxapi.Way{"VERIDIAN_IMAP_ALSO": &s.IMAPAlso, "VERIDIAN_BOX_SMTP_ALSO": &s.SMTPAlso} {
 		w, err := boxapi.ParseWays(get(name))
@@ -180,7 +202,7 @@ func wire(h platform.Host) error {
 	}
 	gh.RateLimiter().SetPolicy(imapgate.LimitIP, imapgate.TriesPerIP, imapgate.LimitWindow)
 	gh.RateLimiter().SetPolicy(imapgate.LimitAddress, imapgate.TriesPerAddr, imapgate.LimitWindow)
-	server, err = imapgate.New(imapgate.Config{Addr: fmt.Sprintf(":%d", set.Port), TLSConfig: tc, BehindTLSProxy: set.Proxy, ProxyProtocol: set.PROXYv2,
+	server, err = imapgate.New(imapgate.Config{Addr: fmt.Sprintf(":%d", set.Port), TLSConfig: tc, BehindTLSProxy: set.Proxy, ProxyProtocol: set.PROXYv2, TrustedProxies: set.IMAPTrusted, MaxConnsPerIP: set.IMAPMaxPerIP,
 		Auth: guard, Boxes: mailboxmodule.NewStore(h.WorkspaceRepository()), Limiter: gh.RateLimiter(), Logger: h.Logger()})
 	if err != nil {
 		return err
@@ -196,9 +218,12 @@ func start(ctx context.Context, h platform.Host) error {
 			ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 			if err == nil {
 				if settings.SMTPPROXYv2 {
-					ln = imapgate.ProxyListener(ln)
+					if len(settings.SMTPTrusted) == 0 {
+						h.Logger().WithField("port", port).Warn("Box SMTP: VERIDIAN_BOX_SMTP_TRUSTED_PROXIES empty, PROXY v2 header accepted from any source")
+					}
+					ln = imapgate.ProxyListenerTrusted(ln, settings.SMTPTrusted)
 				}
-				err = serve(ln)
+				err = serve(imapgate.LimitListener(ln, settings.SMTPMaxPerIP))
 			}
 			if err != nil && ctx.Err() == nil {
 				h.Logger().WithFields(map[string]interface{}{"error": err.Error(), "port": port}).Error("Box SMTP: server stopped")
@@ -211,6 +236,9 @@ func start(ctx context.Context, h platform.Host) error {
 	}
 	if server == nil {
 		return nil
+	}
+	if settings.PROXYv2 && len(settings.IMAPTrusted) == 0 {
+		h.Logger().Warn("IMAP gate: VERIDIAN_IMAP_TRUSTED_PROXIES empty, PROXY v2 header accepted from any source")
 	}
 	h.Logger().Info("IMAP gate: listening")
 	return server.ListenAndServe()

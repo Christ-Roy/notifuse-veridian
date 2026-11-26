@@ -76,3 +76,52 @@ func TestProxyListener_RealClientAddressOrNothing(t *testing.T) {
 		t.Fatal("écoute fermée")
 	}
 }
+
+// L'en-tête PROXY v2 n'est admis que des sources de confiance : de toute autre source la connexion est coupée, sans qu'aucune
+// adresse annoncée soit crue. Liste vide : toutes les sources (comportement historique, annoncé au démarrage).
+func TestProxyListener_TrustedProxies(t *testing.T) {
+	try := func(trustedList string) (net.Conn, net.Conn) {
+		raw, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		list, err := ParseCIDRs(trustedList)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ln := ProxyListenerTrusted(raw, list)
+		t.Cleanup(func() { _ = raw.Close() })
+		got := make(chan net.Conn, 1)
+		go func() {
+			if c, err := ln.Accept(); err == nil {
+				got <- c
+			}
+		}()
+		cl, err := net.Dial("tcp", raw.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = cl.Close() })
+		_, _ = cl.Write(v4Header(1, "203.0.113.7"))
+		select {
+		case c := <-got:
+			return c, cl
+		case <-time.After(700 * time.Millisecond):
+			return nil, cl
+		}
+	}
+	if c, _ := try("127.0.0.0/8"); c == nil || remoteIP(c) != "203.0.113.7" {
+		t.Fatalf("source de confiance : adresse annoncée attendue, reçu %v", c)
+	}
+	if c, _ := try(""); c == nil || remoteIP(c) != "203.0.113.7" {
+		t.Fatalf("liste vide : toute source admise, reçu %v", c)
+	}
+	c, cl := try("10.0.0.0/8")
+	if c != nil {
+		t.Fatalf("source hors liste servie avec l'adresse %s", remoteIP(c))
+	}
+	_ = cl.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if _, err := cl.Read(make([]byte, 1)); err == nil {
+		t.Fatal("la connexion d'une source hors liste doit être coupée")
+	}
+}

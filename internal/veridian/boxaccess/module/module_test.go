@@ -73,3 +73,22 @@ func TestCertNames(t *testing.T) {
 		t.Fatal(n)
 	}
 }
+
+// Plafond par IP (20 par défaut, 0 = aucun) et sources de confiance du PROXY v2 (vide = toutes), pour l'IMAP et le SMTP.
+func TestReadSettings_ConnectionCapAndTrustedProxies(t *testing.T) {
+	env := func(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
+	s, err := ReadSettings(env(nil), "x")
+	if err != nil || s.IMAPMaxPerIP != 20 || s.SMTPMaxPerIP != 20 || len(s.IMAPTrusted) != 0 || len(s.SMTPTrusted) != 0 {
+		t.Fatalf("défauts : %+v %v", s, err)
+	}
+	s, err = ReadSettings(env(map[string]string{"VERIDIAN_IMAP_MAX_CONNS_PER_IP": "5", "VERIDIAN_BOX_SMTP_MAX_CONNS_PER_IP": "0",
+		"VERIDIAN_IMAP_TRUSTED_PROXIES": "172.26.0.0/16", "VERIDIAN_BOX_SMTP_TRUSTED_PROXIES": "10.1.2.3,10.1.2.4"}), "x")
+	if err != nil || s.IMAPMaxPerIP != 5 || s.SMTPMaxPerIP != 0 || len(s.IMAPTrusted) != 1 || len(s.SMTPTrusted) != 2 {
+		t.Fatalf("%+v %v", s, err)
+	}
+	for _, m := range []map[string]string{{"VERIDIAN_IMAP_MAX_CONNS_PER_IP": "-1"}, {"VERIDIAN_BOX_SMTP_MAX_CONNS_PER_IP": "x"}, {"VERIDIAN_IMAP_TRUSTED_PROXIES": "nimporte"}, {"VERIDIAN_BOX_SMTP_TRUSTED_PROXIES": "1.2.3.4/40"}} {
+		if _, err := ReadSettings(env(m), "x"); err == nil {
+			t.Fatalf("%v accepté", m)
+		}
+	}
+}

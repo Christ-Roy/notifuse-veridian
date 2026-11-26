@@ -69,3 +69,21 @@ func TestStartStop_WithoutServer(t *testing.T) {
 		t.Fatal("sans domaine, rien à faire")
 	}
 }
+
+// Plafond par IP (20 par défaut, 0 = aucun) et sources de confiance du PROXY v2 (vide = toutes).
+func TestReadSettings_ConnectionCapAndTrustedProxies(t *testing.T) {
+	env := func(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
+	s, err := ReadSettings(env(nil))
+	if err != nil || s.MaxPerIP != 20 || len(s.Trusted) != 0 {
+		t.Fatalf("défauts : %+v %v", s, err)
+	}
+	s, err = ReadSettings(env(map[string]string{"VERIDIAN_MX_MAX_CONNS_PER_IP": "0", "VERIDIAN_MX_TRUSTED_PROXIES": "172.26.0.0/16, 10.1.2.3"}))
+	if err != nil || s.MaxPerIP != 0 || len(s.Trusted) != 2 {
+		t.Fatalf("%+v %v", s, err)
+	}
+	for _, m := range []map[string]string{{"VERIDIAN_MX_MAX_CONNS_PER_IP": "-1"}, {"VERIDIAN_MX_MAX_CONNS_PER_IP": "x"}, {"VERIDIAN_MX_TRUSTED_PROXIES": "nimporte"}} {
+		if _, err := ReadSettings(env(m)); err == nil {
+			t.Fatalf("%v accepté", m)
+		}
+	}
+}
