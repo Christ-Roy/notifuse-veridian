@@ -302,3 +302,36 @@ func (clearAuth) Start(*smtp.ServerInfo) (string, []byte, error) {
 	return "PLAIN", []byte("\x00jc@boite.fr\x00bon"), nil
 }
 func (clearAuth) Next([]byte, bool) ([]byte, error) { return nil, nil }
+
+// Un login réussi ne rend pas son budget à l'adresse (seule la clé boîte + adresse est remise à zéro).
+func TestLogin_SuccessDoesNotResetIPBudget(t *testing.T) {
+	f, s := bench()
+	rl := ratelimiter.NewRateLimiter()
+	rl.SetPolicy(LimitGateIP, GateTriesIP, GateWindow)
+	rl.SetPolicy(LimitGateBox, GateTriesBox, GateWindow)
+	t.Cleanup(rl.Stop)
+	g, err := NewGate(s, rl, "smtp.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ip := "203.0.113.9"
+	f.verify = boxaccess.ErrAuth
+	for i := 0; i < GateTriesIP-10; i++ {
+		_ = (&gateSession{g: g, ip: ip}).login(fmt.Sprintf("x%d@boite.fr", i), "faux")
+	}
+	f.verify = nil
+	if err := (&gateSession{g: g, ip: ip}).login("jc@boite.fr", "bon"); err != nil {
+		t.Fatalf("connexion valide : %v", err)
+	}
+	f.verify = boxaccess.ErrAuth
+	limited := false
+	for i := 0; i < 15; i++ {
+		var se *gosmtp.SMTPError
+		if errors.As((&gateSession{g: g, ip: ip}).login(fmt.Sprintf("y%d@boite.fr", i), "faux"), &se) && se.Code == 454 {
+			limited = true
+		}
+	}
+	if !limited {
+		t.Fatal("le budget de l'adresse a été remis à zéro par un login réussi")
+	}
+}

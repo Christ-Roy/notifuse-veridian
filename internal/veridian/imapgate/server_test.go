@@ -706,3 +706,27 @@ func TestLogin_RevokedDuringLogin(t *testing.T) {
 		t.Fatal("place non rendue")
 	}
 }
+
+// Un login réussi ne rend pas son budget à l'adresse : sinon un attaquant qui détient un accès valide (ou un seul) remet son
+// compteur d'essais à zéro à volonté et devine sans fin les autres boîtes.
+func TestLogin_SuccessDoesNotResetIPBudget(t *testing.T) {
+	b := newBench(t)
+	ip := "203.0.113.9"
+	for i := 0; i < TriesPerIP-10; i++ {
+		_ = b.srv.newSession(ip, nil).Login(fmt.Sprintf("x%d@boite.fr", i), "faux")
+	}
+	ok := b.srv.newSession(ip, nil)
+	if err := ok.Login("jc@boite.fr", "bon"); err != nil {
+		t.Fatalf("connexion valide : %v", err)
+	}
+	_ = ok.Close()
+	limited := false
+	for i := 0; i < 15; i++ {
+		if err := b.srv.newSession(ip, nil).Login(fmt.Sprintf("y%d@boite.fr", i), "faux"); errors.Is(err, errLimited) {
+			limited = true
+		}
+	}
+	if !limited {
+		t.Fatal("le budget de l'adresse a été remis à zéro par un login réussi")
+	}
+}

@@ -153,7 +153,6 @@ func (s *session) Login(username, password string) error {
 		}
 		return s.fail("login", err)
 	}
-	lim.Reset(LimitIP, from)
 	lim.Reset(LimitAddress, key)
 	s.acc, s.checked = acc, time.Now()
 	boxaccess.Journal.Add("imap", addr, true, "")

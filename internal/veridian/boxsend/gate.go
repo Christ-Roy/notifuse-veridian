@@ -20,7 +20,7 @@ import (
 // la vraie adresse du client (PROXY v2) : les essais se comptent par adresse, un tiers ne ferme pas la porte aux autres. AUTH LOGIN
 // en plus de PLAIN : les vieux Outlook ne connaissent que lui.
 
-// Essais de connexion par adresse IP, par couple boîte + adresse IP (seuls les échecs restent comptés) et par connexion. Le couple, pas
+// Essais de connexion par adresse IP (un succès ne rend pas ce budget : il ne remet à zéro que le couple), par couple boîte + adresse IP et par connexion. Le couple, pas
 // la boîte seule : un tiers qui se trompe exprès n'enferme jamais le titulaire dehors.
 const (
 	LimitGateIP   = "box_smtp_gate_ip"
@@ -158,7 +158,6 @@ func (s *gateSession) login(user, pass string) error {
 	case errors.Is(err, smtp_bridge.ErrTemporaryAuth) || err != nil:
 		return refuse(454, 4, 7, 0, "service indisponible, reessayez")
 	}
-	s.g.lim.Reset(LimitGateIP, from)
 	s.g.lim.Reset(LimitGateBox, box+"|"+from)
 	log.Info("Box SMTP: gate login") // adresse réelle du client : la ligne « Box SMTP: login » du service ne la connaît pas
 	s.user = id
