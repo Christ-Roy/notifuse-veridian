@@ -177,6 +177,53 @@ type veridianService struct {
 	accountGate func(ctx context.Context, userID string) (deleted bool, err error)
 	// mailAccess : acces de boite (IMAP, SMTP), coupes au retrait de leur auteur (fiche 91). Nil = non cable.
 	mailAccess MailAccessCutter
+	// iaFils : fils de « Mon IA » rangés dans l'app, supprimes avec leur organisation ou leur membre (fiche 99). Nil = non cable.
+	iaFils IAFilsCleaner
+}
+
+// IAFilsCleaner supprime les fils de « Mon IA » (CONTRAT-HUB §5.24 : un fil suit le sort de l'organisation et du membre).
+type IAFilsCleaner interface {
+	DeleteWorkspace(ctx context.Context, workspaceID string) (int, error)
+	DeleteMember(ctx context.Context, workspaceID, hubUserID string) (int, error)
+}
+
+// ConfigureIAFils branche la suppression des fils de « Mon IA ». Cablage : veridian_wiring.go.
+func (s *veridianService) ConfigureIAFils(c IAFilsCleaner) {
+	s.iaFils = c
+}
+
+// deleteIAFilsOfWorkspace : l'organisation est supprimee, ses fils partent. Un echec est journalise, jamais bloquant : la porte des fils relit
+// l'espace (supprime = 404), la donnee n'est plus servie meme si la ligne reste jusqu'a la purge (cascade).
+func (s *veridianService) deleteIAFilsOfWorkspace(ctx context.Context, workspaceID string) {
+	if s.iaFils == nil {
+		return
+	}
+	n, err := s.iaFils.DeleteWorkspace(ctx, workspaceID)
+	s.logIAFils(workspaceID, "", n, err)
+}
+
+// deleteIAFilsOfMember : le membre est retire (ou deja absent : rejoue), ses fils dans cet espace partent.
+func (s *veridianService) deleteIAFilsOfMember(ctx context.Context, workspaceID, hubUserID string) {
+	if s.iaFils == nil || hubUserID == "" {
+		return
+	}
+	hubUserID = strings.ToLower(strings.TrimSpace(hubUserID))
+	n, err := s.iaFils.DeleteMember(ctx, workspaceID, hubUserID)
+	s.logIAFils(workspaceID, hubUserID, n, err)
+}
+
+func (s *veridianService) logIAFils(workspaceID, hubUserID string, n int, err error) {
+	if s.logger == nil {
+		return
+	}
+	l := s.logger.WithFields(map[string]interface{}{"tenant_id": workspaceID, "hub_user_id": hubUserID, "deleted": n})
+	if err != nil {
+		l.WithField("error", err.Error()).Warn("veridian: fils de Mon IA non supprimes")
+		return
+	}
+	if n > 0 {
+		l.Info("veridian: fils de Mon IA supprimes")
+	}
 }
 
 // NewVeridianService construit un VeridianService.
@@ -850,6 +897,7 @@ func (s *veridianService) SoftDelete(ctx context.Context, input domain.SoftDelet
 	if err := s.planRepo.SoftDelete(ctx, input.TenantID, input.Reason); err != nil {
 		return nil, err
 	}
+	s.deleteIAFilsOfWorkspace(ctx, input.TenantID)
 	now := time.Now().UTC()
 	purgeEligibleAt := now.Add(veridianPurgeDelay)
 

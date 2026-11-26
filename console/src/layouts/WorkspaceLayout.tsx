@@ -43,6 +43,7 @@ import {
 import { VeridianBrandProvider } from '../components/veridian_organisation'
 import { VeridianBrandHeaderLink } from '../components/veridian_brand_header_link'
 import { VeridianConnectAI } from '../components/veridian_connect_ai'
+import { VeridianMonIA } from '../components/veridian_mon_ia'
 import { VeridianBrandFooter } from '../components/veridian_brand_footer'
 import { VeridianSoftDeleteBanner } from '../components/veridian_soft_delete_banner'
 import { VeridianLogo } from '../components/veridian_logo'
@@ -674,6 +675,7 @@ export function WorkspaceLayout() {
               />
             </Space>
             <Space size={isCompactTopbar ? 'small' : 'middle'}>
+              <VeridianMonIA workspaceId={workspaceId} />
               <VeridianConnectAI compact={isCompactTopbar} />
               {/* En desktop / tablette : actions Help + Language visibles à part.
                   Sous 576px : compactées dans le menu Avatar pour libérer l'espace. */}

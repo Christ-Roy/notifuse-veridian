@@ -40,6 +40,7 @@ var Reserved = map[int]string{
 	84: "DomAuth",
 	85: "L1c",
 	86: "Activite",
+	87: "MonIA",
 }
 
 // Spec décrit une migration Veridian. Les listes d'instructions sont jouées dans l'ordre, dans une

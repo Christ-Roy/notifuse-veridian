@@ -8148,6 +8148,12 @@ msgstr ""
 msgid "Model"
 msgstr "Model"
 
+#: src/components/veridian_mon_ia.tsx
+#: src/components/veridian_mon_ia.tsx
+#: src/components/veridian_mon_ia.tsx
+msgid "Mon IA"
+msgstr ""
+
 #: src/components/sending_profiles/veridian_profile_labels.ts
 msgid "Monday"
 msgstr ""
@@ -10599,6 +10605,12 @@ msgstr ""
 
 #: src/components/prospection/veridian_prospection_dashboard.tsx
 msgid "Relay and recipient provider pairs slowed or stopped by the reputation fuse. In brackets, how many are stopped."
+msgstr ""
+
+#: src/components/veridian_mon_ia.tsx
+#: src/components/veridian_mon_ia.tsx
+#: src/components/veridian_mon_ia.tsx
+msgid "Relier mon IA"
 msgstr ""
 
 #: src/components/prospection/veridian_prospection_dashboard.tsx
@@ -14874,6 +14886,10 @@ msgstr ""
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Volume limit: how many emails total toward this provider in a single day."
+msgstr ""
+
+#: src/components/veridian_mon_ia.tsx
+msgid "Votre IA travaille dans vos apps Veridian depuis son propre écran (Claude, ChatGPT, Mistral…) : reliez-la une fois, sans clé."
 msgstr ""
 
 #: src/components/automations/veridian_flow_node_drawer.tsx

@@ -214,6 +214,7 @@ func (s *veridianService) RemoveMember(ctx context.Context, input domain.RemoveM
 	}
 	s.countActiveAPIKeys(ctx, resp)
 	s.cutMailAccesses(ctx, resp)
+	s.deleteIAFilsOfMember(ctx, resp.TenantID, resp.HubUserID)
 	return resp, nil
 }
 

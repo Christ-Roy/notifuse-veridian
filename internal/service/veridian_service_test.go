@@ -3473,3 +3473,74 @@ func TestConfigureMailAccess_GuardIsTheCutter(t *testing.T) {
 	svc.ConfigureMailAccess(cutter)
 	assert.Same(t, cutter, svc.mailAccess)
 }
+
+// === Mon IA (VER-203, CONTRAT-HUB §5.24, fiche 99) : le fil suit le sort de l'organisation et du membre ===
+
+type iaFilsDouble struct {
+	espaces []string
+	membres []string
+	n       int
+	err     error
+}
+
+func (d *iaFilsDouble) DeleteWorkspace(_ context.Context, ws string) (int, error) {
+	d.espaces = append(d.espaces, ws)
+	return d.n, d.err
+}
+
+func (d *iaFilsDouble) DeleteMember(_ context.Context, ws, user string) (int, error) {
+	d.membres = append(d.membres, ws+"/"+user)
+	return d.n, d.err
+}
+
+// Le câblage (veridian_wiring.go) passe par cette interface : si la méthode changeait de forme, les fils ne seraient plus supprimés, sans bruit.
+func TestConfigureIAFils_FormeDuCablage(t *testing.T) {
+	svc, _ := newVeridianService(t)
+	var asWired domain.VeridianService = svc
+	c, ok := asWired.(interface{ ConfigureIAFils(IAFilsCleaner) })
+	require.True(t, ok)
+	d := &iaFilsDouble{}
+	c.ConfigureIAFils(d)
+	assert.Same(t, d, svc.iaFils)
+}
+
+func TestSoftDelete_SupprimeLesFilsDeLOrganisation(t *testing.T) {
+	ctx := context.Background()
+	svc, m := newVeridianService(t)
+	d := &iaFilsDouble{n: 3}
+	svc.ConfigureIAFils(d)
+	m.planRepo.EXPECT().SoftDelete(ctx, "ws-1", "").Return(nil)
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantSoftDeleted, "ws-1", gomock.Any())
+	m.emitter.EXPECT().Emit(ctx, domain.EventTenantDeleted, "ws-1", gomock.Any())
+	_, err := svc.SoftDelete(ctx, domain.SoftDeleteInput{TenantID: "ws-1"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ws-1"}, d.espaces)
+}
+
+func TestSoftDelete_EchecDeLaPlanche_SupprimeRien_EtUneSuppressionEnPanneNeBloquePas(t *testing.T) {
+	ctx := context.Background()
+	svc, m := newVeridianService(t)
+	d := &iaFilsDouble{}
+	svc.ConfigureIAFils(d)
+	m.planRepo.EXPECT().SoftDelete(ctx, "ws-1", "").Return(errors.New("base"))
+	_, err := svc.SoftDelete(ctx, domain.SoftDeleteInput{TenantID: "ws-1"})
+	require.Error(t, err)
+	assert.Empty(t, d.espaces, "l'organisation n'est pas supprimée : ses fils restent")
+
+	svc2, m2 := newVeridianService(t)
+	svc2.ConfigureIAFils(&iaFilsDouble{err: errors.New("base coupée")})
+	m2.planRepo.EXPECT().SoftDelete(ctx, "ws-1", "").Return(nil)
+	m2.emitter.EXPECT().Emit(ctx, gomock.Any(), "ws-1", gomock.Any()).Times(2)
+	_, err = svc2.SoftDelete(ctx, domain.SoftDeleteInput{TenantID: "ws-1"})
+	require.NoError(t, err, "un échec de suppression des fils ne défait jamais la suppression de l'organisation")
+}
+
+func TestSoftDelete_SansCablage_Fonctionne(t *testing.T) {
+	ctx := context.Background()
+	svc, m := newVeridianService(t)
+	m.planRepo.EXPECT().SoftDelete(ctx, "ws-1", "").Return(nil)
+	m.emitter.EXPECT().Emit(ctx, gomock.Any(), "ws-1", gomock.Any()).Times(2)
+	_, err := svc.SoftDelete(ctx, domain.SoftDeleteInput{TenantID: "ws-1"})
+	require.NoError(t, err)
+}
+

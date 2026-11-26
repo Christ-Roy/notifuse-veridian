@@ -691,3 +691,43 @@ func TestSyncMember_JamaisAdmin_AjouteCommeAvant(t *testing.T) {
 	assert.True(t, resp.Synced)
 	assert.Equal(t, 1, led.withdrawnCalls)
 }
+
+// === Mon IA (VER-203, CONTRAT-HUB §5.24, fiche 99) : le fil suit le sort de l'organisation et du membre ===
+
+func TestRemoveMember_SupprimeLesFilsDeLaPersonne_RejoueCompris(t *testing.T) {
+	ctx := context.Background()
+	for name, retire := range map[string]bool{"retiré": true, "déjà plus membre : rejoué": false} {
+		t.Run(name, func(t *testing.T) {
+			svc, m := newVeridianService(t)
+			d := &iaFilsDouble{n: 2}
+			svc.ConfigureIAFils(d)
+			m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
+			m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(membershipMemberUser(), nil)
+			m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, "ws-1").Return(nil, nil)
+			if retire {
+				m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").Return(membershipEntry("member-uuid-1", "ws-1", "member"), nil)
+				m.workspaceRepo.EXPECT().RemoveUserFromWorkspace(ctx, "member-uuid-1", "ws-1").Return(nil)
+				m.emitter.EXPECT().Emit(ctx, domain.EventTenantMemberRemoved, "ws-1", gomock.Any())
+			} else {
+				m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").Return(nil, sql.ErrNoRows)
+			}
+			_, err := svc.RemoveMember(ctx, domain.RemoveMemberInput{TenantID: "ws-1", HubUserID: testHubUID})
+			require.NoError(t, err)
+			assert.Equal(t, []string{"ws-1/" + testHubUID}, d.membres)
+			assert.Empty(t, d.espaces, "seuls les fils de la personne partent, pas ceux de l'espace")
+		})
+	}
+}
+
+func TestRemoveMember_Proprietaire_Refuse_GardeLesFils(t *testing.T) {
+	ctx := context.Background()
+	svc, m := newVeridianService(t)
+	d := &iaFilsDouble{}
+	svc.ConfigureIAFils(d)
+	m.workspaceRepo.EXPECT().GetByID(ctx, "ws-1").Return(&domain.Workspace{ID: "ws-1"}, nil)
+	m.userRepo.EXPECT().GetUserByHubUserID(ctx, testHubUID).Return(membershipMemberUser(), nil)
+	m.workspaceRepo.EXPECT().GetUserWorkspace(ctx, "member-uuid-1", "ws-1").Return(membershipEntry("member-uuid-1", "ws-1", "owner"), nil)
+	_, err := svc.RemoveMember(ctx, domain.RemoveMemberInput{TenantID: "ws-1", HubUserID: testHubUID})
+	assert.ErrorIs(t, err, ErrCannotRemoveOwner)
+	assert.Empty(t, d.membres)
+}

@@ -106,14 +106,15 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `76` export opérateur SMTP/IMAP
 - `77` couverture CLI embarquée (chaque route `/api/*` a sa commande, MANIFEST) et distribution du CLI
 - `44` rate-limit global de l'API (OWASP API4:2023)
-- `96` CSP de la console (Report-Only puis enforce, `VERIDIAN_CSP_MODE`, rapports `csp_violation`)
+- `96` CSP de la console (`VERIDIAN_CSP_MODE`, rapports `csp_violation`)
+- `99` **« Mon IA »** : fils `/api/hub/ia/fils`, état au Hub, marques `data-mon-ia`
 - `61` nœud webhook des automations : garde SSRF, secret chiffré, HMAC
 - `75` lot L4 : aperçu e-mail en bac à sable, Liquid des contacts, mutants
 - `80` identité : Hub source des utilisateurs, `hub_user_id`, lien à usage unique, routes `/api/hub/*`
 - `82` essai du Hub (jamais appliqué), signal d'activité ; `90` Réglages > Plan
 - `83` MCP derrière la porte du Hub (JWT ES256, outils filtrés), bouton « Brancher mon IA »
 - `84` **standard des boîtes louées** : une porte, Notifuse (IMAP, SMTP, API, webhook), aucun tiers dans le chemin
-- `97` **domaines d'envoi** : signature DKIM d=<domaine du client> à l'envoi, SPF `_spf-envoi.veridian.site`, `sendingDomains.*`
+- `97` **domaines d'envoi** : DKIM d=<domaine du client>, SPF `_spf-envoi.veridian.site`, `sendingDomains.*`
 - `81` capacité base : connexions, incident du 07/11
 - `92` régler sa boîte soi-même : profil Apple, test, export ; `93` ports standard (prêts, fermés)
 - `91` **ce qui dure après un retrait** : accès de boîte, flux, gel (`standing`)

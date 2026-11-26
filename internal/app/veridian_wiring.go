@@ -25,6 +25,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/veridian/boxaccess"
 	boxaccessmod "github.com/Notifuse/notifuse/internal/veridian/boxaccess/module"
 	"github.com/Notifuse/notifuse/internal/veridian/boxsend"
+	"github.com/Notifuse/notifuse/internal/veridian/iafils"
 	"github.com/Notifuse/notifuse/internal/veridian/platform"
 	"github.com/Notifuse/notifuse/internal/veridian/relaycert"
 	"github.com/Notifuse/notifuse/internal/veridian/relaysettings"
@@ -625,6 +626,10 @@ func (a *App) veridianInitHandlers() error {
 		ConfigureMailAccess(service.MailAccessCutter)
 	}); ok && a.db != nil {
 		cut.ConfigureMailAccess(&boxaccess.Guard{Store: boxaccess.NewStore(a.db), WS: a.workspaceRepo, Standing: &standing.Store{DB: a.db}})
+	}
+	// Fils de « Mon IA » : supprimes avec leur organisation ou leur membre (CONTRAT-HUB §5.24, fiche 99).
+	if fils, ok := a.veridianService.(interface{ ConfigureIAFils(service.IAFilsCleaner) }); ok && a.db != nil {
+		fils.ConfigureIAFils(&iafils.Store{DB: a.db})
 	}
 	if gcRunner, ok := a.veridianService.(httpHandler.VeridianOrphanDBGCRunner); ok {
 		veridianHandler.SetOrphanDBGC(gcRunner, a.config.Environment)
