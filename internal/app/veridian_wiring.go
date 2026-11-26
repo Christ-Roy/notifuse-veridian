@@ -21,6 +21,7 @@ import (
 	"github.com/Notifuse/notifuse/internal/service"
 	"github.com/Notifuse/notifuse/internal/service/queue"
 	"github.com/Notifuse/notifuse/internal/veridian/accountgate"
+	"github.com/Notifuse/notifuse/internal/veridian/activite"
 	"github.com/Notifuse/notifuse/internal/veridian/boxaccess"
 	boxaccessmod "github.com/Notifuse/notifuse/internal/veridian/boxaccess/module"
 	"github.com/Notifuse/notifuse/internal/veridian/boxsend"
@@ -1086,6 +1087,10 @@ func (a *App) veridianWrapHandler(handler http.Handler) http.Handler {
 	// Désinscription en un clic de l'en-tête List-Unsubscribe (RFC 8058) : le POST formulaire d'un client mail devient la
 	// requête JSON du handler upstream (mesuré en prod le 26/11 : 400 sur chaque clic). Cf. veridian_oneclick_unsubscribe.go.
 	handler = middleware.VeridianOneClickUnsubscribe(handler)
+
+	// Activité Mail vers le Hub (§5.25, fiche 98) : l'HÔTE du lien d'un clic suivi (/r/, /visit), jamais l'URL, posé sur l'événement
+	// message.clicked de la file après la redirection de l'upstream. Transparent tant que la capacité « activite » n'a rien câblé.
+	handler = activite.WrapClicks(handler)
 
 	// === Freeze member per-user (CONTRAT-HUB §5.21, 2026-05-25) ===
 	// Wrappe le handler GLOBAL : si user frozen sur le workspace courant,

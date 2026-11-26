@@ -118,6 +118,11 @@ job "notifuse" {
         to           = 2525
         host_network = "tailscale"
       }
+      # Métriques de l'activité Mail vers le Hub (fiche 98) : écouteur à part, tailnet seul, jamais derrière Traefik (le 8081 est public).
+      port "activite" {
+        to           = 9464
+        host_network = "tailscale"
+      }
     }
 
     # L'IMAP des boîtes louées au catalogue : l'entrée publique le suivra quand le conteneur bouge (fiche 84).
@@ -141,6 +146,14 @@ job "notifuse" {
       name     = "notifuse-mx"
       provider = "nomad"
       port     = "mx"
+      tags     = ["traefik.enable=false"]
+    }
+
+    # Prometheus de la flotte lit /metrics ici (file de l'activité Mail : retard, en attente, lots par verdict).
+    service {
+      name     = "notifuse-activite"
+      provider = "nomad"
+      port     = "activite"
       tags     = ["traefik.enable=false"]
     }
 
@@ -291,6 +304,10 @@ VERIDIAN_BOX_SMTP_TRUSTED_PROXIES=172.26.64.1/32,100.88.202.29/32
 VERIDIAN_MX_DOMAINS=messagerie-nord-776.fr=robertbrunon
 # CSP de la console (VER-265, fiche 96) : report = Content-Security-Policy-Report-Only, enforce = bloquante, off = aucune.
 VERIDIAN_CSP_MODE=enforce
+# Activité Mail vers le Hub par lots (CONTRAT-HUB §5.25, fiche 98). Éteint tant que le Hub ne sert pas /api/evenements/notifuse/lot :
+# les déclencheurs remplissent la file (7 jours, 100 000 par espace au plus), rien ne part. Métriques sur le port « activite ».
+VERIDIAN_ACTIVITE_ENABLED=false
+VERIDIAN_ACTIVITE_METRICS_PORT=9464
 VERIDIAN_MX_HOST=mx.veridian.site
 SMTP_BRIDGE_TLS=starttls
 VERIDIAN_RELAY_CERT_MANAGED=true

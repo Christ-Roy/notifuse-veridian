@@ -90,6 +90,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `45` invariants CONTRAT-HUB v1.5
 - `46` secrets HMAC cross-app — matrice exhaustive
 - `47` pricing — source de vérité
+- `98` **activité Mail vers le Hub** par lots signés (§5.25) : file bornée, worker, métriques
 
 **CI, tests, déploiement**
 - `48` constitution CI — règles non négociables (tiers de promotion prod)

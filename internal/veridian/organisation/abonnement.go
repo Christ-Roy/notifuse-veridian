@@ -8,10 +8,11 @@ import (
 	"strings"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/veridian/activite/activitesql"
 )
 
 const (
-	hubSubscriptionID   = "veridianhubevenements"
+	hubSubscriptionID   = activitesql.SubscriptionID // son secret signe aussi les lots d'activité (§5.25)
 	hubSubscriptionName = "Veridian Hub"
 	hubEventsPath       = "/api/evenements/notifuse"
 	defaultHubURL       = "https://app.veridian.site"
@@ -19,8 +20,12 @@ const (
 )
 
 // subscriptionURL : l'adresse du Hub, jamais celle d'un appelant.
-func (h *Handler) subscriptionURL() string {
-	base := strings.TrimRight(strings.TrimSpace(h.HubURL), "/")
+func (h *Handler) subscriptionURL() string { return HubEventsURL(h.HubURL) }
+
+// HubEventsURL : l'adresse du canal d'événements du Hub pour une base configurée (HUB_BASE_URL, défaut app.veridian.site). Les lots
+// d'activité partent à cette adresse + "/lot" (internal/veridian/activite), et seulement si l'abonnement pointe cette adresse.
+func HubEventsURL(hubBase string) string {
+	base := strings.TrimRight(strings.TrimSpace(hubBase), "/")
 	if base == "" {
 		base = defaultHubURL
 	}
