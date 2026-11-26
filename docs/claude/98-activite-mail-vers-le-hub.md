@@ -39,6 +39,7 @@ entrée (capture de l'envoyé, hôte du clic). Lots de 200 événements ET 1 Mo 
 | Réponse | Effet |
 |---|---|
 | 2xx | lignes closes `accepte` ; `acceptes`, `doublons` (lot rejoué) et `ignores` du Hub comptés |
+| 200 avec `raison` | lu par le Hub, RIEN relayé (`evenements_fermes` : phase de test de `/lot`, `paire_eteinte`, `organisation_inactive`) : lignes closes `ferme`, jamais rejouées, comptées à part (`veridian_activite_lots_fermes_total{raison}`, autres valeurs = `autre`), journal info par espace et par raison une fois par heure |
 | 400, 409, 413 | lot abandonné (`refuse`), journal `error`, jamais rejoué |
 | 401, 403 | lignes gardées, journal `error`, pause 30 s à 15 min ; un nouveau secret (abonnement resynchronisé) relance aussitôt |
 | 429, 5xx, 404, réseau | lignes gardées, attente 30 s, 1, 2, 4… 30 min, `Retry-After` respecté ; au-delà d'une heure sans succès, `error` toutes les 10 min |
@@ -63,9 +64,9 @@ absorbés par le CRM et reviennent en `crm.ignorees`, pas en `doublons`. Sans ef
 
 `GET /metrics` sur l'écouteur à part. **Pourquoi un port de plus** : le 8081 est servi par Traefik au public, et l'exportateur
 OpenCensus de l'upstream (`TRACING_PROMETHEUS_PORT`, déjà 9464) n'existe qu'avec `TRACING_ENABLED`, qui allume aussi les traces et les
-vues HTTP par route (séries sans fin, palier gratuit de Grafana Cloud). Neuf séries, aucune étiquette par espace :
+vues HTTP par route (séries sans fin, palier gratuit de Grafana Cloud). Dix familles, aucune étiquette par espace :
 `veridian_activite_enabled`, `_pending_events`, `_oldest_pending_seconds`, `_workspaces_pending`, `_workspaces_failing`, `_lag_alert`,
-`_last_pass_timestamp_seconds`, `_events_total{resultat}`, `_lots_total{resultat}`. Le détail d'un espace est dans les journaux
+`_last_pass_timestamp_seconds`, `_events_total{resultat}`, `_lots_total{resultat}`, `_lots_fermes_total{raison}`. Le détail d'un espace est dans les journaux
 (`workspace_id`), jamais une adresse ni un secret.
 Dans l'app, sans Prometheus : `error` « retard de la file vers le Hub » toutes les 10 min tant que l'envoi est allumé et que le plus vieil
 événement attend plus que le seuil, puis « retard résorbé ».

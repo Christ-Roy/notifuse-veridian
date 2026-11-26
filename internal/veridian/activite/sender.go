@@ -55,6 +55,19 @@ type Reply struct {
 		Index  int    `json:"index"`
 		Reason string `json:"raison"`
 	} `json:"ignores"`
+	// Reason : un 200 qui n'a rien relayé (evenements_fermes, paire_eteinte, organisation_inactive) ; traité, jamais rejoué.
+	Reason string `json:"raison"`
+}
+
+// ClosedReason : la raison d'un 200 qui n'a rien relayé, réduite aux valeurs connues du Hub (étiquette de métrique bornée).
+func ClosedReason(r string) string {
+	switch r = strings.TrimSpace(r); r {
+	case "":
+		return ""
+	case "evenements_fermes", "paire_eteinte", "organisation_inactive":
+		return r
+	}
+	return "autre"
 }
 
 // Result : l'issue d'un envoi.

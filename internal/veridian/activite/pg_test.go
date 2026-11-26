@@ -188,6 +188,7 @@ type fakeHub struct {
 	secret string
 	status []int // une réponse par appel ; la dernière se répète
 	header http.Header
+	reason string // un 200 « rien relayé »
 	lots   []Lot
 	calls  atomic.Int32
 }
@@ -207,6 +208,11 @@ func (f *fakeHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	f.lots = append(f.lots, l)
 	code := 200
+	if f.reason != "" {
+		w.WriteHeader(200)
+		fmt.Fprintf(w, `{"acceptes":0,"doublons":0,"ignores":[],"raison":%q}`, f.reason)
+		return
+	}
 	if len(f.status) > 0 {
 		code = f.status[min(n-1, len(f.status)-1)]
 	}
@@ -433,5 +439,34 @@ func TestWorker_SeulsLesEspacesNommes(t *testing.T) {
 	w.Pass(context.Background())
 	if hub.calls.Load() != 1 {
 		t.Fatal("espace nommé : envoyé")
+	}
+}
+
+// 200 avec raison (phase de test du Hub, liaison éteinte, organisation suspendue) : traité, jamais rejoué, et jamais compté en succès.
+func TestWorker_200AvecRaisonCompteAPart(t *testing.T) {
+	db := testDB(t)
+	hub := &fakeHub{t: t, secret: testSecret, reason: "evenements_fermes"}
+	srv := httptest.NewServer(hub)
+	defer srv.Close()
+	subscribe(t, db, srv.URL+"/api/evenements/notifuse", testSecret)
+	fill(t, db, 3)
+	c := &clock{time.Now()}
+	w := newWorker(db, srv.URL, c)
+	w.Pass(context.Background())
+	c.t = c.t.Add(time.Hour)
+	w.Pass(context.Background())
+	if hub.calls.Load() != 1 || count(t, db, `outcome = 'ferme'`) != 3 || count(t, db, `done_at IS NULL`) != 0 {
+		t.Fatalf("appels %d, fermés %d", hub.calls.Load(), count(t, db, `outcome = 'ferme'`))
+	}
+	var out strings.Builder
+	w.Metrics.Write(&out)
+	for _, want := range []string{`veridian_activite_lots_fermes_total{raison="evenements_fermes"} 1`, `veridian_activite_events_total{resultat="ferme"} 3`,
+		`veridian_activite_events_total{resultat="accepte"} 0`} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("%s absent : %s", want, out.String())
+		}
+	}
+	if ClosedReason("nouvelle_raison") != "autre" || ClosedReason("paire_eteinte") != "paire_eteinte" || ClosedReason("") != "" {
+		t.Fatal("étiquette bornée aux raisons connues")
 	}
 }

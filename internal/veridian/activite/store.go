@@ -15,6 +15,7 @@ import (
 const (
 	OutcomeAccepted = "accepte" // 200 du Hub (acceptée, doublon ou ignorée : le Hub l'a lue)
 	OutcomeRefused  = "refuse"  // 400, 409, 413 : lot abandonné, jamais rejoué
+	OutcomeClosed   = "ferme"    // 200 avec raison : lu par le Hub, rien relayé au CRM, jamais rejoué
 	OutcomeExpired  = "perime"  // plus de 7 jours : le Hub l'ignorerait
 	OutcomeOverflow = "debordement"
 	OutcomeOrphan   = "orphelin" // le message a disparu

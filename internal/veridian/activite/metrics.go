@@ -22,12 +22,16 @@ type Metrics struct {
 	alert       bool
 	events      map[string]int64
 	lots        map[string]int64
+	closed      map[string]int64 // lots lus mais non relayés, par raison
 }
 
 // NewMetrics : compteurs à zéro.
 func NewMetrics() *Metrics {
-	m := &Metrics{events: map[string]int64{}, lots: map[string]int64{}}
-	for _, k := range []string{"accepte", "doublon", "ignore", OutcomeRefused, OutcomeExpired, OutcomeOverflow, OutcomeOrphan} {
+	m := &Metrics{events: map[string]int64{}, lots: map[string]int64{}, closed: map[string]int64{}}
+	for _, k := range []string{"evenements_fermes", "paire_eteinte", "organisation_inactive", "autre"} {
+		m.closed[k] = 0
+	}
+	for _, k := range []string{"accepte", "doublon", "ignore", OutcomeClosed, OutcomeRefused, OutcomeExpired, OutcomeOverflow, OutcomeOrphan} {
 		m.events[k] = 0
 	}
 	for _, v := range []Verdict{Accepted, Refused, Unauthorized, Retry} {
@@ -56,6 +60,14 @@ func (m *Metrics) AddEvents(result string, n int) {
 }
 
 func (m *Metrics) AddLot(v Verdict) { m.mu.Lock(); m.lots[v.String()]++; m.mu.Unlock() }
+
+// AddClosed : un lot que le Hub a lu sans rien relayer (200 avec raison), et ses événements.
+func (m *Metrics) AddClosed(reason string, events int) {
+	m.mu.Lock()
+	m.closed[reason]++
+	m.events[OutcomeClosed] += int64(events)
+	m.mu.Unlock()
+}
 
 func b2i(b bool) int {
 	if b {
@@ -93,8 +105,9 @@ func (m *Metrics) Write(w io.Writer) {
 			fmt.Fprintf(w, "%s{%s=%q} %d\n", name, label, k, vals[k])
 		}
 	}
-	c("veridian_activite_events_total", "Evenements par issue (accepte, doublon, ignore par le Hub ; refuse, perime, debordement, orphelin ici).", "resultat", m.events)
+	c("veridian_activite_events_total", "Evenements par issue (accepte, doublon, ignore par le Hub ; ferme = lu sans relais ; refuse, perime, debordement, orphelin ici).", "resultat", m.events)
 	c("veridian_activite_lots_total", "Lots postes au Hub par verdict.", "resultat", m.lots)
+	c("veridian_activite_lots_fermes_total", "Lots acceptes (200) que le Hub n'a pas relayes au CRM, par raison.", "raison", m.closed)
 }
 
 // Handler : GET /metrics.

@@ -53,7 +53,8 @@ type wsState struct {
 	lastFlush, pauseUntil, firstFailure, lastPurge, lastLog time.Time
 	failures                                                int
 	lastVerdict                                             Verdict
-	deniedSecret                                            string // empreinte du secret refusé (401) : un nouveau secret relance aussitôt
+	deniedSecret                                            string               // empreinte du secret refusé (401) : un nouveau secret relance aussitôt
+	closedLog                                               map[string]time.Time // dernier journal par raison d'un 200 « rien relayé »
 }
 
 func (w *Worker) defaults() {
@@ -257,9 +258,27 @@ func (w *Worker) deliver(ctx context.Context, db *sql.DB, ws string, sub Subscri
 	f := map[string]interface{}{"lot_id": b.Lot.LotID, "events": len(b.IDs), "bytes": len(b.Body), "status": res.Status}
 	switch res.Verdict {
 	case Accepted:
-		if err := MarkDone(ctx, db, b.IDs, OutcomeAccepted, b.Lot.LotID); err != nil {
+		outcome, reason := OutcomeAccepted, ClosedReason(res.Reply.Reason)
+		if reason != "" {
+			outcome = OutcomeClosed
+		}
+		if err := MarkDone(ctx, db, b.IDs, outcome, b.Lot.LotID); err != nil {
 			log.WithFields(f).WithField("error", err.Error()).Error("Activité Mail : lot accepté mais non clos, il sera rejoué (le Hub dédoublonne)")
 			return false
+		}
+		if reason != "" {
+			// Le Hub a lu le lot et n'a rien relayé (phase de test, liaison éteinte, organisation suspendue) : jamais un succès muet.
+			w.Metrics.AddClosed(reason, len(b.IDs))
+			st.failures, st.firstFailure, st.pauseUntil, st.deniedSecret = 0, time.Time{}, time.Time{}, ""
+			if st.closedLog == nil {
+				st.closedLog = map[string]time.Time{}
+			}
+			if now.Sub(st.closedLog[reason]) >= time.Hour {
+				st.closedLog[reason] = now
+				f["raison"] = reason
+				log.WithFields(f).Info("Activité Mail : lot lu par le Hub mais rien relayé au CRM")
+			}
+			return true
 		}
 		w.Metrics.AddEvents("accepte", res.Reply.Accepted)
 		w.Metrics.AddEvents("doublon", res.Reply.Duplicates)
