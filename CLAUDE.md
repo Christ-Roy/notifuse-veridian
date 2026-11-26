@@ -65,19 +65,14 @@ brique = une fiche + une ligne d'index.
     l'adresse. Un utilisateur ne se crée, modifie, supprime qu'au Hub. → `45`, `80`, `89`
 13. **Toute route `/api/*` a une commande CLI, et la CLI embarquée = son MANIFEST.** Le contrôle
    tourne au pre-push et en CI. → `77`
-14. **Connexions PostgreSQL : `DB_MAX_CONNECTIONS=80` pour `max_connections=200` de pg-saas** (5 apps, budget
-    Notifuse 80). Une connexion par workspace en permanence (le worker d'envoi les parcourt toutes chaque
-    seconde) : ~25 aujourd'hui, marge ~70 workspaces ; au-delà, polling adaptatif. Pool durci (`pkg/pgdial` :
-    keepalive, refus des replicas), sonde de fond `/healthz` (vert 45 s après le dernier succès), démarrage
-    qui réessaie, poignée de main bornée par le contexte (lib/pq ne le fait pas : redémarrage du 14/11). → `81`
-15. **Base : pg-saas depuis le 09/11/2026** (`172.26.64.1:15432`, rôle `notifuse`). Plus de `notifuse-db`. Chaque base
-    workspace est **fermée à PUBLIC dès sa création** (`REVOKE … FROM PUBLIC`, `GRANT CONNECT` à `notifuse` et
-    `pgsaas_mon`), testé : les autres apps du cluster ne la lisent pas. → plan nomad-veridian §20, `81`
+14. **Connexions PostgreSQL : `DB_MAX_CONNECTIONS=80` pour `max_connections=200` de pg-saas.** Une connexion
+    par workspace en permanence (~25, marge ~70) ; pool durci `pkg/pgdial`. Détail et incident du 14/11 → `81`
+15. **Base : pg-saas depuis le 09/11/2026** (`172.26.64.1:15432`, rôle `notifuse`). Chaque base workspace est
+    fermée à PUBLIC dès sa création (testé). → `81`
 16. **Toute chaîne neuve de la console** : `lingui extract` (catalogues `.po` à jour) ET un `msgstr` français non
     vide, sinon la CI refuse (`Console build`, puis 3 tests de complétude). Lancer par `lourd`, jamais sur app-01. → `83`
-17. **Un appelant = un jeton en cache, jamais un provision par appel.** La CLI garde le JWT propriétaire d'un espace
-    sur disque (`~/.cache/notifuse-cli`, 0600, 30 min max, invalidé sur 401) : un provision génère un code de
-    connexion qui épuisait le quota du client (10/11). Les codes du Hub ont leur quota propre. → `80`, `83`
+17. **Un appelant = un jeton en cache, jamais un provision par appel** (JWT propriétaire en cache disque 0600,
+    30 min, invalidé sur 401 ; un provision épuisait le quota de codes du client le 10/11). → `80`, `83`
 
 ## Relever plutôt que croire
 
@@ -170,10 +165,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `24` vague hygiène/conformité cold
 
 **Console assumée, vérité d'un profil**
-- `53` console assumée : inventaire, page Profils d'envoi, plan en 5 lots
-- `54` vérité d'un profil (lot 2) : `EffectivePlan`, `emailProfiles.overview`, pause
-- `55` page Profils d'envoi (lot 3) : carte, assistant, `emailProfiles.create`
-- `56` séparation transactionnel / commercial (lot 4) : usage de profil, compteurs (V61)
+- `53`-`56` console assumée : profils d'envoi (vérité, page, assistant), transactionnel / commercial (V61)
 - `57` tableau de bord de prospection (lot 5) : `prospection.stats`
 - `58` dépilage équitable de `email_queue` : relances avant J0, tourniquet
 - `59` automations observables (conception seule)

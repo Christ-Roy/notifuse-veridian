@@ -35,7 +35,7 @@ var reservoirTools = []tool{
 	{Name: "lists_create", Description: "Cree une liste (par exemple une liste de reserve).", Resource: domain.PermissionResourceLists, Write: true,
 		Method: http.MethodPost, Path: "/api/lists.create", Props: map[string]any{"id": str("identifiant, lettres et chiffres, 32 au plus"), "name": str("nom affiche"), "description": str("a quoi sert la liste"),
 			"is_public": boolean("visible des contacts"), "is_double_optin": boolean("confirmation par mail avant inscription")}, Required: []string{"id", "name"}},
-	{Name: "segment_contacts", Description: "Contacts d'un segment, pagines. Un segment se recalcule seul d'apres ses regles : on n'y ajoute personne a la main.", Resource: domain.PermissionResourceContacts,
+	{Name: "segment_contacts", Description: "Contacts d'un segment, pagines. Un segment se recalcule seul d'apres ses regles : on n'y ajoute personne a la main. Segment neuf ou recalcule : attendre status=active dans segment_get, sinon la liste est partielle (mesure le 26/11 : 0 puis 24 contacts en 4 s).", Resource: domain.PermissionResourceContacts,
 		Method: http.MethodGet, Path: "/api/segments.contacts", Paginated: true, Props: withPage(map[string]any{"segment_id": str("id du segment (segments_list)")}), Required: []string{"segment_id"}},
 	{Name: "segment_rebuild", Description: "Recalcule un segment maintenant (une sequence qui se declenche sur ce segment peut demarrer).", Resource: domain.PermissionResourceContacts, Write: true, Destructive: true,
 		Method: http.MethodPost, Path: "/api/segments.rebuild", Props: map[string]any{"segment_id": str("id du segment")}, Required: []string{"segment_id"}},

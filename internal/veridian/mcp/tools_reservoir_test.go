@@ -110,3 +110,17 @@ func TestReservoirActivate_LotToujoursNomme(t *testing.T) {
 	assert.Equal(t, false, out["isError"])
 	assert.Equal(t, "/api/veridian/reservoir.activate", r.disp.path)
 }
+
+// Une IA qui exporte un segment juste après l'avoir créé lit une liste partielle si elle n'attend pas le calcul
+// (mesuré en prod le 26/11/2026, VER-129). La description de l'outil doit le lui dire.
+func TestSegmentContacts_DescriptionDitDAttendreLeCalcul(t *testing.T) {
+	for _, tl := range reservoirTools {
+		if tl.Name == "segment_contacts" {
+			if !strings.Contains(tl.Description, "status=active") || !strings.Contains(tl.Description, "segment_get") {
+				t.Fatalf("description sans la consigne d'attente : %q", tl.Description)
+			}
+			return
+		}
+	}
+	t.Fatal("outil segment_contacts introuvable")
+}
