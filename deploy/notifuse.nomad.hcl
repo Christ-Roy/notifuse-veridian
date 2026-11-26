@@ -289,6 +289,8 @@ VERIDIAN_BOX_SMTP_TRUSTED_PROXIES=172.26.64.1/32,100.88.202.29/32
 # « domaine=espace » : l'espace propriétaire reçoit les adresses sans profil (contact@, postmaster@...). robertbrunon = Veridian,
 # sans redirection ; jamais greenbeamcraft (client, redirige ses réponses chez lui). 26/11/2026, fiche 84.
 VERIDIAN_MX_DOMAINS=messagerie-nord-776.fr=robertbrunon
+# CSP de la console (VER-265, fiche 96) : report = Content-Security-Policy-Report-Only, enforce = bloquante, off = aucune.
+VERIDIAN_CSP_MODE=report
 VERIDIAN_MX_HOST=mx.veridian.site
 SMTP_BRIDGE_TLS=starttls
 VERIDIAN_RELAY_CERT_MANAGED=true

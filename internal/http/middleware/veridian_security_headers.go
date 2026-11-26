@@ -16,9 +16,8 @@ import (
 //     match. Pas de match → pas d'header ACAO → browser bloque.
 //
 //  2. Security headers manquants (5/5) : HSTS, X-Frame-Options,
-//     X-Content-Type-Options, Referrer-Policy. Pas de CSP : trop risqué de
-//     casser la console UI sans audit dédié — on garde un report-only pour
-//     plus tard si Robert le demande.
+//     X-Content-Type-Options, Referrer-Policy. CSP depuis le 26/11/2026 (VER-265) :
+//     veridian_csp.go, Report-Only d'abord puis enforce après un parcours relu.
 //
 // Convention Veridian (cf. ../../../CLAUDE.md §veridian-override) : ce
 // middleware est dans le même package `middleware` mais préfixé
@@ -70,7 +69,8 @@ func VeridianSecurityHeadersMiddleware(next http.Handler) http.Handler {
 		// Évite de leaker l'URL complète vers un domaine externe.
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 
-		// CSP volontairement absente — voir doc en tête du fichier.
+		// CSP (VER-265) : Report-Only par défaut, enforce par VERIDIAN_CSP_MODE. Cf. veridian_csp.go.
+		veridianSetCSP(w, r)
 
 		// === 3. Preflight ===
 		if r.Method == http.MethodOptions {

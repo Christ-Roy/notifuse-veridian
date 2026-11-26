@@ -110,6 +110,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `76` export opérateur SMTP/IMAP
 - `77` couverture CLI embarquée (chaque route `/api/*` a sa commande, MANIFEST) et distribution du CLI
 - `44` rate-limit global de l'API (OWASP API4:2023)
+- `96` CSP de la console (Report-Only puis enforce, `VERIDIAN_CSP_MODE`, rapports `csp_violation`)
 - `61` nœud webhook des automations : garde SSRF, secret chiffré, HMAC
 - `75` lot L4 : aperçu e-mail en bac à sable, Liquid des contacts, mutants
 - `80` identité : Hub source des utilisateurs, `hub_user_id`, lien à usage unique, routes `/api/hub/*`

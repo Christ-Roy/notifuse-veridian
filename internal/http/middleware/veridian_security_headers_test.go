@@ -184,3 +184,13 @@ func TestDefaultCORSAllowlist_HardcodedDomains(t *testing.T) {
 	}
 	assert.ElementsMatch(t, want, got, "allowlist par défaut a changé — vérifier que c'est intentionnel")
 }
+
+// La CSP passe par ce middleware (VER-265) : une page de la console la reçoit, en Report-Only par défaut.
+func TestVeridianSecurityHeadersMiddleware_PoseLaCSP(t *testing.T) {
+	t.Setenv("VERIDIAN_CSP_MODE", "")
+	rec := httptest.NewRecorder()
+	VeridianSecurityHeadersMiddleware(noopHandler()).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/console/", nil))
+	if rec.Header().Get("Content-Security-Policy-Report-Only") == "" {
+		t.Fatal("CSP Report-Only absente de la console")
+	}
+}

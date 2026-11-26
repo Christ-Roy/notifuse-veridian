@@ -10,3 +10,4 @@
 /api/workspaces.acceptInvitation	Fermée (403 members_managed_by_hub) : l'acceptation se fait au Hub. Fiche 86.
 /api/veridian/actions/{action}	Actions demandees par une autre app : authentifiees par un jeton d action ES256 du Hub, qu une CLI ne peut pas emettre. Fiche 87.
 /api/	Attrape-tout : repond 404 a une route inconnue (internal/veridian/apinotfound). Rien a commander.
+/api/veridian/csp-report	Rapports de violation CSP envoyés par les navigateurs (report-uri, report-to), sans authentification. Rien à commander : se lit dans le journal csp_violation (obs search). VER-265.

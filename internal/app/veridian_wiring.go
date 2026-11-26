@@ -677,6 +677,8 @@ func (a *App) veridianInitHandlers() error {
 	// project_mail_sending_standalone_decision.
 
 	veridianHandler.RegisterRoutes(a.mux, a.config.HubAPISecret)
+	// Rapports de violation CSP des navigateurs (VER-265), journal csp_violation. Cf. internal/http/veridian_csp_report.go.
+	(&httpHandler.VeridianCSPReportHandler{Logger: a.logger}).RegisterRoutes(a.mux)
 
 	// Endpoint generateMagicLink (auth API key tenant Notifuse).
 	veridianMagicHandler := httpHandler.NewVeridianMagicHandler(
