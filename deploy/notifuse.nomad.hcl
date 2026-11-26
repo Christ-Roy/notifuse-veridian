@@ -279,6 +279,13 @@ VERIDIAN_BOX_SMTP_PUBLIC_PORT=443
 VERIDIAN_BOX_SMTP_PROXY_PROTOCOL=true
 # Récepteur : adresses de profil de ces domaines seulement. Entrée publique 25 = job de l'infra, PROXY v2 exigé.
 VERIDIAN_MX_PROXY_PROTOCOL=true
+# Seuls les HAProxy de l'infra (notifuse-mx-entree) ont le droit d'annoncer une adresse client en PROXY v2 (26/11/2026).
+# Vides, n'importe quel pair du tailnet s'inventait une adresse : vu depuis le bastion, en-tête forgé accepté sur les trois.
+# Mesuré dans le réseau du conteneur : HAProxy arrive par 172.26.64.1 (passerelle du pont d'ovh-prod, même nœud) ;
+# 100.88.202.29 (tailnet d'ovh-prod) pour le cas où Notifuse et son entrée seraient sur deux nœuds.
+VERIDIAN_MX_TRUSTED_PROXIES=172.26.64.1/32,100.88.202.29/32
+VERIDIAN_IMAP_TRUSTED_PROXIES=172.26.64.1/32,100.88.202.29/32
+VERIDIAN_BOX_SMTP_TRUSTED_PROXIES=172.26.64.1/32,100.88.202.29/32
 VERIDIAN_MX_DOMAINS=messagerie-nord-776.fr
 VERIDIAN_MX_HOST=mx.veridian.site
 SMTP_BRIDGE_TLS=starttls
