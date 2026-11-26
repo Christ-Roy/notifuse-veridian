@@ -163,4 +163,7 @@ pour la créer en miroir.
 - Signeur Go : `middleware.SignVeridianHubRequest(r, secret, body)` (utilisé par `organisation.syncMember`).
 - **Bascule** : quand le Hub signe tout en v2, poser `VERIDIAN_HMAC_REQUIRE_V2=true` dans `deploy/notifuse.nomad.hcl` : la v1
   est alors refusée (401). Tant que la variable est absente, rien ne change pour les appelants v1.
+- **Mesure avant bascule** (26/11/2026) : chaque v1 acceptée écrit `veridian_hmac_v1_accepted method=… path=… ua=…` sur la
+  sortie d'erreur du job notifuse (Loki). Zéro ligne sur 24 h, en prod, alors la bascule est sûre ; sinon l'agent nommé est
+  l'appelant à passer en v2 (`SignVeridianHubRequest`, ou `hmac_headers` de la CLI).
 - L'exemption du rate-limit global (fiche 44) vérifie la signature (v1 ou v2) sans la consommer.

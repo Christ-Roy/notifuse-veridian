@@ -104,10 +104,10 @@ func TestVeridianSecurityHeadersMiddleware_CORSAllowlist_SuffixMatchBlocked(t *t
 	handler := VeridianSecurityHeadersMiddleware(noopHandler())
 
 	for _, attack := range []string{
-		"https://evil.com.notifuse.app.veridian.site",  // suffix attack
-		"https://notifuse.app.veridian.site.evil.com",  // prefix attack
-		"https://notifuse.app.veridian.site:8080",       // port différent
-		"http://notifuse.app.veridian.site",             // scheme http vs https
+		"https://evil.com.notifuse.app.veridian.site", // suffix attack
+		"https://notifuse.app.veridian.site.evil.com", // prefix attack
+		"https://notifuse.app.veridian.site:8080",     // port différent
+		"http://notifuse.app.veridian.site",           // scheme http vs https
 	} {
 		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
 		req.Header.Set("Origin", attack)

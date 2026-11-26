@@ -134,7 +134,30 @@ func verifyVeridianHubSignature(r *http.Request, hubSecret string, consume bool)
 	if v2 && consume && !veridianSeenSignatures.firstUse(hex.EncodeToString(provided), time.Now()) {
 		return http.StatusUnauthorized, "Signature already used"
 	}
+	if !v2 && consume {
+		veridianNoteV1(r)
+	}
 	return 0, ""
+}
+
+// veridianV1Log reçoit une ligne par signature v1 ACCEPTÉE (variable pour les tests).
+var veridianV1Log io.Writer = os.Stderr
+
+// veridianNoteV1 trace chaque appel encore signé en v1, pour décider sur mesure du passage à
+// VERIDIAN_HMAC_REQUIRE_V2=true : zéro ligne `veridian_hmac_v1_accepted` sur une journée dans les journaux du
+// job notifuse (Loki), alors la v1 peut être refusée. Sans cette trace (avant le 26/11/2026), « une journée sans
+// appel v1 » ne se mesurait pas. Ni signature ni corps dans la ligne : méthode, chemin, agent seulement.
+func veridianNoteV1(r *http.Request) {
+	ua := strings.Map(func(c rune) rune {
+		if c < 0x20 || c == 0x7f || c == '"' {
+			return '_'
+		}
+		return c
+	}, r.UserAgent())
+	if len(ua) > 120 {
+		ua = ua[:120]
+	}
+	_, _ = io.WriteString(veridianV1Log, "veridian_hmac_v1_accepted method="+r.Method+" path="+strconv.Quote(r.URL.Path)+" ua=\""+ua+"\"\n")
 }
 
 // VeridianSigVersionHeader porte la version de la signature Hub ("2").

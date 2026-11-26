@@ -310,3 +310,38 @@ func TestSeenSignatures_PurgeEtSaturation(t *testing.T) {
 	assert.True(t, s.firstUse("b", now), "les signatures hors fenêtre sont oubliées")
 	assert.LessOrEqual(t, len(s.seen), 2)
 }
+
+// Chaque v1 acceptée laisse une ligne `veridian_hmac_v1_accepted` (mesure avant REQUIRE_V2) ; une v2, une v1
+// refusée ou une vérification sans consommation (rate-limit) n'en laissent aucune. Ni signature ni corps tracés.
+func TestVeridianHMAC_V1AccepteeEstTracee(t *testing.T) {
+	var buf bytes.Buffer
+	old := veridianV1Log
+	veridianV1Log = &buf
+	defer func() { veridianV1Log = old }()
+
+	body := []byte(`{"tenant_id":"ws-1"}`)
+	req := newSignedRequest(t, testHubSecret, body)
+	req.Header.Set("User-Agent", "hub-reconcile/1.0\r\ninjecte")
+	sig := req.Header.Get("X-Veridian-Hub-Signature")
+	code, reached := runHMAC(req)
+	require.Equal(t, http.StatusOK, code)
+	require.True(t, reached)
+	line := buf.String()
+	assert.Contains(t, line, `veridian_hmac_v1_accepted method=POST path="/api/tenants/provision" ua="hub-reconcile/1.0__injecte"`)
+	assert.Equal(t, 1, strings.Count(line, "\n"), "une seule ligne, retour chariot de l'agent neutralisé")
+	assert.NotContains(t, line, sig)
+	assert.NotContains(t, line, "ws-1")
+
+	buf.Reset()
+	code, _ = runHMAC(signedV2(t, http.MethodPost, "/api/tenants/provision", body))
+	require.Equal(t, http.StatusOK, code)
+	assert.Empty(t, buf.String(), "v2 : rien à tracer")
+
+	bad := newSignedRequest(t, "autre-secret", body)
+	code, _ = runHMAC(bad)
+	require.Equal(t, http.StatusUnauthorized, code)
+	assert.Empty(t, buf.String(), "v1 refusée : rien à tracer")
+
+	assert.True(t, veridianHubSignatureValid(newSignedRequest(t, testHubSecret, body), testHubSecret))
+	assert.Empty(t, buf.String(), "vérification sans consommation : pas de double compte")
+}
