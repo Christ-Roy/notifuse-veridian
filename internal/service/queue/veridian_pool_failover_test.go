@@ -719,6 +719,20 @@ func TestVeridianBuildFailoverCandidates_NeverContainsTheReservedTransactionalPr
 	require.NotEmpty(t, candidates)
 }
 
+// 26/11 (parcours Mail en prod) : une réponse écrite depuis la boîte du profil transactionnel réservé partait d'un profil
+// commercial. Un mail de boîte reste épinglé à son profil, réservé ou non.
+func TestVeridianBuildFailoverCandidates_MailDeBoiteEpingleASonProfil(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	ws := transactionalTestWorkspace(true)
+	entry := veridianTestEntry("c1", "lead@gmail.com", domain.EmailQueuePayload{FromAddress: "no-reply@tx.example"})
+	entry.SourceType = domain.EmailQueueSourceMail
+	entry.IntegrationID = "tx"
+	candidates := env.worker.veridianBuildFailoverCandidates(ws, entry, &ws.Integrations[1])
+	require.Len(t, candidates, 1)
+	assert.Equal(t, "tx", candidates[0].IntegrationID)
+	assert.Equal(t, "no-reply@tx.example", candidates[0].FromAddress)
+}
+
 // --- Fiche 62 : évaluation complète d'un candidat, ancre de séquence, raison de report ---
 
 func poolCandidate(t *testing.T, env *veridianThrottleTestEnv, ws *domain.Workspace, entry *domain.EmailQueueEntry, id string) veridianFailoverCandidate {

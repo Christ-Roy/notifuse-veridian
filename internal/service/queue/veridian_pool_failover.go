@@ -250,6 +250,13 @@ func (w *EmailQueueWorker) veridianBuildFailoverCandidatesWithAnchor(
 ) ([]veridianFailoverCandidate, veridianAnchorInfo) {
 	assignedFrom, assignedName := entry.Payload.FromAddress, entry.Payload.FromName
 
+	// Un mail écrit depuis une boîte (mail.messages.send|reply) part de CETTE boîte ou attend : jamais d'une autre adresse.
+	// Mesuré en prod le 26/11 (parcours Mail) : la boîte était le profil transactionnel réservé, retiré des candidats, et la
+	// réponse est partie du profil commercial, sous une autre adresse que celle à qui le contact avait écrit.
+	if entry.SourceType == domain.EmailQueueSourceMail {
+		return []veridianFailoverCandidate{veridianCandidateFromIntegration(assigned, assignedFrom, assignedName)}, veridianAnchorInfo{}
+	}
+
 	profiles := workspace.VeridianMarketingEmailProfiles()
 	if len(profiles) == 0 {
 		// Lot 4 : si l'integration assignee est le profil transactionnel reserve, la

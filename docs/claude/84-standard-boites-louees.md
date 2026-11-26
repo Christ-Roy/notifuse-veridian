@@ -117,3 +117,8 @@ connu » sans Message-ID cité) sortait alors le prospect de ses séquences. `mx
 
 S0 ne dépend pas des autres. S4 ferme des ports dont se servent Gmail « Envoyer en tant que » et le Dolibarr d'ASD : recenser les
 usagers avant.
+
+## Une réponse part de sa boîte (26/11/2026)
+Mesuré en prod (parcours Mail) : une réponse écrite depuis la boîte du profil transactionnel réservé est partie d'un profil commercial,
+sous une autre adresse. Le basculement de pool (`veridian_pool_failover.go`) retirait le profil réservé des candidats. Un mail de boîte
+(`EmailQueueSourceMail`, `mail.messages.send|reply`) est désormais épinglé à son profil : il part de cette adresse ou il attend.
