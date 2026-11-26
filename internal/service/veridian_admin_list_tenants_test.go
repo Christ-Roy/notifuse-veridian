@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -21,6 +22,25 @@ func mustParseTime(t *testing.T, s string) time.Time {
 }
 
 // === ListTenants ===
+
+// 26/11 : le relevé du Hub lisait le lien ailleurs et comptait 15 espaces « non reliés » à tort. La liste admin rend le lien
+// qui fait foi (veridian_plan.hub_tenant_id), clé toujours là, null sans lien.
+func TestVeridianService_ListTenants_RendLeLienDuHub(t *testing.T) {
+	svc, m := newVeridianService(t)
+	svc.ConfigureHubTenantStore(&fakeHubTenantStore{got: map[string]string{"test1": "3108142a"}})
+	ctx := context.Background()
+	m.planRepo.EXPECT().ListByPrefix(ctx, "test").Return([]string{"test1", "test2"}, nil)
+	m.planRepo.EXPECT().Get(ctx, gomock.Any()).Return(&domain.VeridianPlan{Plan: "free", Status: domain.PlanStatusActive}, nil).Times(2)
+
+	resp, err := svc.ListTenants(ctx, domain.ListTenantsInput{Prefix: "test"})
+	require.NoError(t, err)
+	require.NotNil(t, resp.Managed[0].HubTenantID)
+	assert.Equal(t, "3108142a", *resp.Managed[0].HubTenantID)
+	assert.Nil(t, resp.Managed[1].HubTenantID)
+	b, err := json.Marshal(resp.Managed[1])
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"hub_tenant_id":null`, "clé présente même sans lien")
+}
 
 func TestVeridianService_ListTenants_RejectsShortPrefix(t *testing.T) {
 	svc, _ := newVeridianService(t)

@@ -1117,6 +1117,8 @@ type DiscoveryWorkspace struct {
 	// TOUJOURS presente : le Hub la lit pour savoir que l'app rend le statut (reconcile notWired).
 	TrialStatus *string `json:"trial_status"`
 	TrialEndsAt *string `json:"trial_ends_at"`
+	// HubTenantID : veridian_plan.hub_tenant_id, le seul lien que lisent les jetons d'action. Clé toujours présente, null sans lien.
+	HubTenantID *string `json:"hub_tenant_id"`
 }
 
 // DiscoveryResponse est la reponse de POST /api/users/by-email.
@@ -1187,6 +1189,8 @@ type TenantSummary struct {
 	Plan      string `json:"plan,omitempty"`       // free/pro/business/enterprise (si HasPlan)
 	Status    string `json:"status,omitempty"`     // active/suspended/deleted (si HasPlan)
 	DeletedAt string `json:"deleted_at,omitempty"` // ISO 8601 si soft-deleted
+	// HubTenantID : veridian_plan.hub_tenant_id, le seul lien que lisent les jetons d'action. Clé toujours présente (managed), null sans lien.
+	HubTenantID *string `json:"hub_tenant_id"`
 }
 
 // === Webhook events vers Hub ===

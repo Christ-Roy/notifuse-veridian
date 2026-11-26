@@ -1173,6 +1173,7 @@ func (s *veridianService) ListTenants(ctx context.Context, input domain.ListTena
 				summary.DeletedAt = plan.DeletedAt.UTC().Format(time.RFC3339)
 			}
 		}
+		summary.HubTenantID = s.hubTenantOf(ctx, tid)
 		resp.Managed = append(resp.Managed, summary)
 		managedSet[tid] = true
 	}
@@ -2354,8 +2355,29 @@ func (s *veridianService) LookupByEmail(ctx context.Context, email string) (*dom
 			}
 		}
 	}
+	for i := range resp.Workspaces {
+		resp.Workspaces[i].HubTenantID = s.hubTenantOf(ctx, resp.Workspaces[i].WorkspaceID)
+	}
 
 	return resp, nil
+}
+
+// hubTenantOf : le lien au Hub d'un espace pour les lectures (by-email, admin/tenants), nil sans lien ou store non câblé.
+func (s *veridianService) hubTenantOf(ctx context.Context, workspaceID string) *string {
+	if s.hubTenantStore == nil {
+		return nil
+	}
+	t, err := s.hubTenantStore.HubTenantOf(ctx, workspaceID)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.WithField("workspace_id", workspaceID).WithField("error", err.Error()).Warn("veridian: lecture du lien Hub impossible, rendu null")
+		}
+		return nil
+	}
+	if t == "" {
+		return nil
+	}
+	return &t
 }
 
 // hubUserIDFromProvision lit metadata.hub_user_id (CONTRAT-HUB §5.1).

@@ -55,3 +55,9 @@ qui « résout l'espace autrement » (409 à 01:08:43Z) était cet espace suppri
 résolution (`actions.SQLStore.Resolve`). Depuis, `wipe-test-tenants` par préfixe saute tout espace relié à un tenant du
 Hub (`hub_linked` dans la réponse) ; nommé dans `tenant_ids`, il part comme avant. Le journal du ménage nomme désormais
 le préfixe et les espaces supprimés (`wiped_ids`).
+
+### Lire le lien
+
+`veridian_plan.hub_tenant_id` fait seul foi (jetons d action, organisation poussée). Il est rendu par espace dans
+`GET /api/veridian/admin/tenants` (HMAC, CLI `admin:tenants`) et dans `GET /api/users/by-email` : clé `hub_tenant_id` toujours
+présente, `null` sans lien. Avant le 26/11, by-email ne le rendait pas : le relevé du Hub comptait 15 espaces « non reliés » à tort.

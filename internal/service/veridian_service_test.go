@@ -3372,6 +3372,16 @@ func (f *fakeHubTenantStore) HubTenantOf(_ context.Context, ws string) (string, 
 	return f.got[ws], nil
 }
 
+// La découverte by-email et admin/tenants rendent le lien par espace (null sans lien) ; un store non câblé rend null, jamais une erreur.
+func TestVeridianService_HubTenantOf_PourLesLectures(t *testing.T) {
+	svc, _ := newVeridianService(t)
+	assert.Nil(t, svc.hubTenantOf(context.Background(), "ws"), "store non câblé")
+	svc.ConfigureHubTenantStore(&fakeHubTenantStore{got: map[string]string{"ws": "t-1"}})
+	require.NotNil(t, svc.hubTenantOf(context.Background(), "ws"))
+	assert.Equal(t, "t-1", *svc.hubTenantOf(context.Background(), "ws"))
+	assert.Nil(t, svc.hubTenantOf(context.Background(), "autre"))
+}
+
 // 26/11 01:08Z : le ménage de la CI (préfixe « e2e ») a supprimé l'espace d'essai du CRM, relié au Hub, en plein essai. Un espace
 // relié n'est jamais emporté par un préfixe ; nommé dans tenant_ids, il part comme avant.
 func TestVeridianService_WipeTestTenants_PrefixeEpargneLesEspacesReliesAuHub(t *testing.T) {

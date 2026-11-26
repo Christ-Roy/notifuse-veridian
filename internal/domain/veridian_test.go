@@ -1270,6 +1270,19 @@ func TestWipeTestTenantsResponse_HubLinkedJSON(t *testing.T) {
 	assert.NotContains(t, string(b), "hub_linked")
 }
 
+// Le Hub lit hub_tenant_id dans by-email et admin/tenants : la clé est toujours là, null sans lien (jamais absente).
+func TestDiscoveryWorkspaceEtTenantSummary_HubTenantIDToujoursPresent(t *testing.T) {
+	for _, v := range []any{DiscoveryWorkspace{WorkspaceID: "ws"}, TenantSummary{TenantID: "ws"}} {
+		b, err := json.Marshal(v)
+		require.NoError(t, err)
+		assert.Contains(t, string(b), `"hub_tenant_id":null`)
+	}
+	id := "t-1"
+	b, err := json.Marshal(DiscoveryWorkspace{WorkspaceID: "ws", HubTenantID: &id})
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"hub_tenant_id":"t-1"`)
+}
+
 // Le message d'un 409 hub_tenant_conflict dit lequel des deux liens tient : l'espace ou le tenant.
 func TestHubTenantConflict_Error(t *testing.T) {
 	assert.Contains(t, (&HubTenantConflict{WorkspaceID: "beta", HubTenantID: "t", LinkedWorkspace: "alpha"}).Error(), "autre espace")
