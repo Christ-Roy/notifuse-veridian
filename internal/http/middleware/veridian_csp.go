@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"net/http"
 	"os"
 	"strings"
@@ -66,4 +68,30 @@ func veridianSetCSP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set(header, VeridianCSPPolicy())
 	w.Header().Set("Reporting-Endpoints", `csp="`+VeridianCSPReportPath+`"`)
+}
+
+// VeridianCSPNonce rend un nonce neuf (128 bits) pour une page rendue par le serveur avec un script inline.
+func VeridianCSPNonce() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return base64.RawURLEncoding.EncodeToString(b) // [A-Za-z0-9_-] : admis par la grammaire CSP, jamais échappé par html/template (un « + » devenait &#43;)
+}
+
+// VeridianSetPageCSP remplace la CSP générique par la politique propre d'une page rendue côté serveur (même mode
+// VERIDIAN_CSP_MODE, mêmes rapports). Mesuré le 26/11/2026 : /veridian/auto-login pose le jeton de session par un script
+// inline ; sous la CSP de la console (enforce), la connexion par le Hub a été coupée 3 min. Une telle page déclare
+// son script par nonce, ici.
+func VeridianSetPageCSP(w http.ResponseWriter, policy string) {
+	h := w.Header()
+	h.Del("Content-Security-Policy")
+	h.Del("Content-Security-Policy-Report-Only")
+	header := "Content-Security-Policy-Report-Only"
+	switch veridianCSPMode() {
+	case "off":
+		return
+	case "enforce":
+		header = "Content-Security-Policy"
+	}
+	h.Set(header, policy+"; report-uri "+VeridianCSPReportPath+"; report-to csp")
+	h.Set("Reporting-Endpoints", `csp="`+VeridianCSPReportPath+`"`)
 }

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -301,4 +302,41 @@ func TestVeridianAutoLogin_ClearsBounceMarks(t *testing.T) {
 	h.handleAutoLogin(rec, httptest.NewRequest(http.MethodGet, "/veridian/auto-login?token="+token, nil))
 	assert.Contains(t, rec.Body.String(), "veridian-logout=; Max-Age=0")
 	assert.Contains(t, rec.Body.String(), "veridian-auto-bounce=; Max-Age=0")
+}
+
+// VER-265 (26/11/2026) : la page pose le jeton par un script inline ; sous la CSP de la console en enforce, la connexion
+// par le Hub a été coupée 3 min. La page remplace la CSP générique par la sienne, son script autorisé par un nonce neuf.
+func TestVeridianAutoLogin_CSPPropreAvecNonce(t *testing.T) {
+	t.Setenv("VERIDIAN_CSP_MODE", "enforce")
+	nonces := map[string]bool{}
+	for i := 0; i < 2; i++ {
+		ctrl := gomock.NewController(t)
+		svc := mocks.NewMockUserServiceInterface(ctrl)
+		svc.EXPECT().CreateAutoLoginSession(gomock.Any(), "u@x.test").Return(&domain.AuthResponse{Token: "jwt-csp", ExpiresAt: time.Now().Add(time.Hour)}, nil)
+		h := newAutologinHandler(svc, "secret-1")
+		req := httptest.NewRequest(http.MethodGet, "/veridian/auto-login?token="+makeAutologinTokenForTest(t, "secret-1", "ws-1", "u@x.test"), nil)
+		rec := httptest.NewRecorder()
+		rec.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'") // posée avant par le middleware
+		h.handleAutoLogin(rec, req)
+		ctrl.Finish()
+
+		csp := rec.Header().Get("Content-Security-Policy")
+		m := regexp.MustCompile(`script-src 'nonce-([A-Za-z0-9_-]{20,})'`).FindStringSubmatch(csp)
+		require.NotNil(t, m, "CSP sans nonce : %q", csp)
+		assert.Contains(t, csp, "default-src 'none'")
+		assert.Contains(t, csp, "frame-ancestors 'none'")
+		for _, d := range strings.Split(csp, ";") {
+			if d = strings.TrimSpace(d); strings.HasPrefix(d, "script-src") {
+				assert.Equal(t, "script-src 'nonce-"+m[1]+"'", d, "script-src : le nonce seul, jamais unsafe-inline")
+			}
+		}
+		assert.Empty(t, rec.Header().Get("Content-Security-Policy-Report-Only"))
+		scripts := regexp.MustCompile(`<script\b[^>]*>`).FindAllString(rec.Body.String(), -1)
+		require.NotEmpty(t, scripts)
+		for _, s := range scripts {
+			assert.Equal(t, `<script nonce="`+m[1]+`">`, s, "chaque script porte le nonce de l'en-tête")
+		}
+		nonces[m[1]] = true
+	}
+	assert.Len(t, nonces, 2, "un nonce neuf par requête")
 }

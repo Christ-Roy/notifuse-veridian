@@ -56,3 +56,38 @@ func TestVeridianCSPPolicy_SansInlineNiEval(t *testing.T) {
 		}
 	}
 }
+
+// Page rendue côté serveur : sa politique remplace la générique, dans le mode courant, rapports compris.
+func TestVeridianSetPageCSP_RemplaceEtSuitLeMode(t *testing.T) {
+	for mode, header := range map[string]string{"": "Content-Security-Policy-Report-Only", "enforce": "Content-Security-Policy"} {
+		t.Setenv("VERIDIAN_CSP_MODE", mode)
+		rec := httptest.NewRecorder()
+		rec.Header().Set("Content-Security-Policy", VeridianCSPPolicy())
+		rec.Header().Set("Content-Security-Policy-Report-Only", VeridianCSPPolicy())
+		VeridianSetPageCSP(rec, "default-src 'none'; script-src 'nonce-abc'")
+		got := rec.Header().Values(header)
+		if len(got) != 1 || !strings.HasPrefix(got[0], "default-src 'none'; script-src 'nonce-abc'") || !strings.Contains(got[0], "report-uri /api/veridian/csp-report") {
+			t.Fatalf("mode %q : %v", mode, rec.Header())
+		}
+		other := "Content-Security-Policy"
+		if header == other {
+			other = "Content-Security-Policy-Report-Only"
+		}
+		if rec.Header().Get(other) != "" {
+			t.Fatalf("mode %q : la politique générique reste en %s", mode, other)
+		}
+	}
+}
+
+// Nonce : neuf à chaque appel, assez long, et seulement [A-Za-z0-9_-] (html/template échappait un « + » en &#43;, test
+// instable vu au pre-push du 26/11 : il ne passait que si le tirage n'en contenait pas).
+func TestVeridianCSPNonce(t *testing.T) {
+	vus := map[string]bool{}
+	for i := 0; i < 200; i++ {
+		n := VeridianCSPNonce()
+		if len(n) < 20 || strings.Trim(n, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-") != "" || vus[n] {
+			t.Fatalf("nonce %q : trop court, caractère échappable par html/template, ou répété", n)
+		}
+		vus[n] = true
+	}
+}

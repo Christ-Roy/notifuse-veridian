@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/http/middleware"
 	"github.com/Notifuse/notifuse/pkg/logger"
 )
 
@@ -127,7 +128,7 @@ var autoLoginPageTemplate = template.Must(template.New("autologin").Parse(`<!DOC
     <p>Signing you in…</p>
     <noscript>JavaScript required for sign-in.</noscript>
   </div>
-  <script>
+  <script nonce="{{ .Nonce }}">
     (function() {
       try {
         localStorage.setItem('auth_token', {{ .Token }});
@@ -216,11 +217,15 @@ func (h *VeridianAutoLoginHandler) handleAutoLogin(w http.ResponseWriter, r *htt
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+	// CSP propre à la page (VER-265) : son seul script, inline, autorisé par un nonce neuf. Rien d'autre ne charge.
+	nonce := middleware.VeridianCSPNonce()
+	middleware.VeridianSetPageCSP(w, "default-src 'none'; script-src 'nonce-"+nonce+"'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 	w.WriteHeader(http.StatusOK)
 
 	if err := autoLoginPageTemplate.Execute(w, map[string]interface{}{
 		"Token":       authResp.Token,
 		"RedirectURL": redirectURL,
+		"Nonce":       nonce,
 	}); err != nil {
 		h.logger.WithField("error", err.Error()).Error("VeridianAutoLogin: template execute failed")
 	}

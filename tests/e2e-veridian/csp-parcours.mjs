@@ -13,10 +13,13 @@ const PAGES = ['dashboard', 'contacts', 'lists', 'templates', 'broadcasts', 'aut
 
 const browser = await chromium.launch({ args: ['--no-sandbox'] })
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'fr-FR' })
+// Relevé au niveau du CONTEXTE (fonction exposée) : il survit aux navigations. Le 26/11, un relevé par page (window.__csp)
+// perdait les violations de la page d'atterrissage /veridian/auto-login, et la connexion a été coupée en enforce.
+const toutes = []
+await ctx.exposeFunction('__cspRapport', (v) => { toutes.push(v) })
 await ctx.addInitScript(() => {
-  window.__csp = []
   document.addEventListener('securitypolicyviolation', (e) => {
-    window.__csp.push({ d: e.effectiveDirective, b: (e.blockedURI || '').split('?')[0].slice(0, 120), s: (e.sourceFile || '').split('?')[0].slice(-80), disp: e.disposition })
+    window.__cspRapport({ d: e.effectiveDirective, b: (e.blockedURI || '').split('?')[0].slice(0, 120), s: (e.sourceFile || '').split('?')[0].slice(-80), disp: e.disposition, doc: location.pathname })
   })
 })
 const page = await ctx.newPage()
@@ -33,12 +36,15 @@ const shot = async (nom) => {
   const b = await page.screenshot({ type: 'jpeg', quality: 55 })
   console.log(`CAPTURE ${nom} ${b.toString('base64')}`)
 }
-const violations = async () => page.evaluate(() => window.__csp.splice(0))
+const violations = async () => { await page.waitForTimeout(300); return toutes.splice(0) }
 
 await page.goto(LIEN, { timeout: 90000 })
 try { await page.waitForURL('**/console/**', { timeout: 90000 }) } catch { console.log('NON ABOUTI : connexion'); process.exit(2) }
 const base = page.url().split('/console')[0]
 const res = { csp: null, pages: [], violations: [], erreurs: errors, monaco: false, controle: null }
+const atterrissage = await violations() // /veridian/auto-login puis le premier écran de la console
+res.pages.push({ page: 'connexion', violations: atterrissage.length })
+res.violations.push(...atterrissage.map((x) => ({ page: 'connexion', ...x })))
 for (const p of PAGES) {
   await page.goto(`${base}/console/workspace/${WS}/${p}`, { timeout: 90000 })
   await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {})

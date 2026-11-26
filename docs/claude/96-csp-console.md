@@ -16,7 +16,11 @@ SPA statiques (Vite) : `script-src 'self'` sans `'unsafe-inline'` ni nonce.
   `no-store`). Garde : `console/src/veridian_index_csp.test.ts`.
 - Passage en enforce : après un vrai parcours de la console relu sans violation inattendue, et un contrôle positif
   (un `onerror` injecté doit être bloqué et rapporté).
-- **Passage en enforce le 26/11/2026** après le parcours `tests/e2e-veridian/csp-parcours.mjs` (node02, `lourd --navigateur`,
-  lien SSO par `--secrets`) : 10 pages + éditeur de modèle jusqu'au Monaco des données de test, 0 violation ; le contrôle
-  positif (`onerror` injecté) rapporté (`script-src-attr`, lu dans `csp_violation`). Rejouer après tout ajout de dépendance
-  externe à la console. Repli immédiat : `VERIDIAN_CSP_MODE=report` dans le job.
+- **Incident du 26/11/2026, 15:21:24Z à 15:24:45Z** : passé en enforce, la connexion par le Hub est tombée (3 min, repli
+  `report` par le script serveur de déploiement rejoué depuis le bastion). `/veridian/auto-login` est une page rendue par
+  le Go dont le script inline pose le jeton : bloqué. Les rapports `script-src-elem` étaient dans le journal, mal lus ; le
+  parcours relevait les violations par page et perdait celles de la page d'atterrissage. Corrigé : la page pose sa propre
+  CSP (`VeridianSetPageCSP`, `default-src 'none'`, script par nonce neuf), le parcours relève au niveau du contexte.
+- **Règles** : toute page HTML rendue par le Go avec un script déclare sa CSP par `VeridianSetPageCSP` + nonce. Avant
+  enforce : (1) `obs search csp_violation --since 24h` lu EN ENTIER, groupé par document, zéro hors contrôle positif ;
+  (2) `tests/e2e-veridian/csp-parcours.mjs` vert, connexion comprise. Repli immédiat : `VERIDIAN_CSP_MODE=report`.
