@@ -163,6 +163,14 @@ paths:
     $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.access.create'
   /api/veridian/mail.access.revoke:
     $ref: './paths/veridian-mail.yaml#/~1api~1veridian~1mail.access.revoke'
+  /api/veridian/sendingDomains.list:
+    $ref: './paths/veridian-domains.yaml#/~1api~1veridian~1sendingDomains.list'
+  /api/veridian/sendingDomains.create:
+    $ref: './paths/veridian-domains.yaml#/~1api~1veridian~1sendingDomains.create'
+  /api/veridian/sendingDomains.verify:
+    $ref: './paths/veridian-domains.yaml#/~1api~1veridian~1sendingDomains.verify'
+  /api/veridian/sendingDomains.delete:
+    $ref: './paths/veridian-domains.yaml#/~1api~1veridian~1sendingDomains.delete'
   /api/veridian/folders.list:
     $ref: './paths/veridian-folders.yaml#/~1api~1veridian~1folders.list'
   /api/veridian/folders.create:
@@ -256,6 +264,12 @@ components:
       $ref: './components/schemas/veridian-mail.yaml#/MailSendRequest'
     MailSendResult:
       $ref: './components/schemas/veridian-mail.yaml#/MailSendResult'
+    SendingDomain:
+      $ref: './components/schemas/veridian-domains.yaml#/SendingDomain'
+    SendingDomainRecord:
+      $ref: './components/schemas/veridian-domains.yaml#/SendingDomainRecord'
+    SendingDomainCheck:
+      $ref: './components/schemas/veridian-domains.yaml#/SendingDomainCheck'
     SendTransactionalRequest:
       $ref: './components/schemas/transactional.yaml#/SendTransactionalRequest'
     TransactionalNotificationSendParams:

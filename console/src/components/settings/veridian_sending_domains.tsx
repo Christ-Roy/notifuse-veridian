@@ -9,6 +9,7 @@ import { ApiError } from '../../services/api/client'
 import {
   checkOf,
   sendingDomainsService,
+  spfInclude,
   type DomainCheck,
   type DomainRecord,
   type SendingDomain
@@ -139,6 +140,8 @@ function DomainCard({ domain, busy, onVerify, onRemove }: { domain: SendingDomai
             <Tag color="success" icon={<CheckCircleOutlined />}>
               {t`Verified: emails are signed`}
             </Tag>
+          ) : domain.lost_at ? (
+            <Tag color="error">{t`Signing stopped`}</Tag>
           ) : (
             <Tag color="warning">{t`Waiting for DNS`}</Tag>
           )}
@@ -162,6 +165,20 @@ function DomainCard({ domain, busy, onVerify, onRemove }: { domain: SendingDomai
         </Space>
       }
     >
+      {!verified && domain.lost_at && (
+        <Alert
+          type="error"
+          showIcon
+          role="alert"
+          style={{ marginBottom: 12 }}
+          message={t`Signing stopped on ${dayjs(domain.lost_at).format('LLL')}`}
+          description={
+            domain.lost_reason === 'mismatch'
+              ? t`The DKIM record of this domain no longer carries our key. Emails from this domain now leave without our signature. Publish the DKIM value below again, then click Verify.`
+              : t`The DKIM record of this domain was removed. Emails from this domain now leave without our signature. Publish the DKIM record below again, then click Verify.`
+          }
+        />
+      )}
       <Paragraph type="secondary" style={{ marginBottom: 12 }}>
         {domain.last_checked_at
           ? t`Last checked ${dayjs(domain.last_checked_at).fromNow()}.`
@@ -197,6 +214,35 @@ function RecordBlock({ record, check }: { record: DomainRecord; check?: DomainCh
         return c.verdict
     }
   }
+  // Conseils et motifs traduits ici, dans la langue du compte (le serveur ne rend que des codes de verdict exploitables).
+  const include = record.kind === 'spf' ? spfInclude(record.value) : ''
+  const shortName = record.name.split('.').slice(0, 2).join('.')
+  const note =
+    record.kind === 'dkim'
+      ? t`Signs your emails. Publish it as is; some DNS hosts want the name without the domain (${shortName}).`
+      : record.kind === 'spf'
+        ? t`Allows our relays to send for you. A domain has only one SPF record: if one already exists, add "include:${include}" to it, before the "all".`
+        : t`Recommended. Start with p=none, then move to p=quarantine once the reports are clean. If one already exists, keep it.`
+  const verdictDetail = (c: DomainCheck): string => {
+    switch (c.verdict) {
+      case 'missing':
+        return record.kind === 'dkim'
+          ? t`No TXT record at this name yet.`
+          : record.kind === 'spf'
+            ? t`This domain has no SPF record.`
+            : t`No DMARC policy: recommended, without it Gmail and Yahoo filter more strictly.`
+      case 'mismatch':
+        return record.kind === 'dkim'
+          ? t`A TXT record exists but does not carry our public key: copy the whole value again.`
+          : t`The SPF record does not authorize our relays: add include:${include}.`
+      case 'multiple':
+        return t`Several SPF records: receivers ignore all of them. Merge them into one.`
+      case 'temperror':
+        return t`DNS unreachable, nothing concluded: try again in a moment.`
+      default:
+        return ''
+    }
+  }
   return (
     <div style={{ border: '1px solid rgba(0,0,0,0.08)', borderRadius: 8, padding: 12, minWidth: 0 }}>
       <Space wrap style={{ marginBottom: 8 }}>
@@ -204,9 +250,9 @@ function RecordBlock({ record, check }: { record: DomainRecord; check?: DomainCh
         <Tag>{record.required ? t`Required` : t`Recommended`}</Tag>
         {check ? <Tag color={check.ok ? 'success' : check.verdict === 'temperror' ? 'default' : 'error'}>{verdictLabel(check)}</Tag> : <Tag>{t`Not checked`}</Tag>}
       </Space>
-      {check && !check.ok && check.detail && (
-        <Paragraph type="danger" style={{ marginBottom: 8 }}>
-          {check.detail}
+      {check && !check.ok && (
+        <Paragraph type={check.verdict === 'temperror' ? 'secondary' : 'danger'} style={{ marginBottom: 8 }}>
+          {verdictDetail(check)}
         </Paragraph>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(70px, max-content) minmax(0, 1fr)', gap: '4px 12px', alignItems: 'start' }}>
@@ -221,11 +267,9 @@ function RecordBlock({ record, check }: { record: DomainRecord; check?: DomainCh
           {record.value}
         </Text>
       </div>
-      {record.note && (
-        <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 13 }}>
-          {record.note}
-        </Paragraph>
-      )}
+      <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, fontSize: 13 }}>
+        {note}
+      </Paragraph>
     </div>
   )
 }

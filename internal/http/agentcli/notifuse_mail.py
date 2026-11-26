@@ -572,6 +572,9 @@ def format_domains(data, records=True):
     L = []
     for d in doms:
         L.append(f"{d.get('domain')} · {STATUS_FR.get(d.get('status'), d.get('status'))}" + (" · complet" if d.get("complete") else "") + f" · id {d.get('id')}")
+        if d.get("lost_at") and d.get("status") != "verified":
+            motif = "clé DKIM différente de la nôtre" if d.get("lost_reason") == "mismatch" else "clé DKIM retirée du DNS"
+            L.append(f"  SIGNATURE COUPÉE le {nc._ts(d['lost_at'])} UTC : {motif}. Republier le DKIM, puis domains:verify --id {d.get('id')}")
         if d.get("last_checked_at"):
             L.append(f"  dernier contrôle : {nc._ts(d['last_checked_at'])} UTC")
         verdicts = {c.get("kind"): c for c in d.get("checks") or []}

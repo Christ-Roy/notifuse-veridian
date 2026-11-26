@@ -1,0 +1,44 @@
+# Domaines d'envoi authentifiés (VER-166, fiche 97). Écrit à la main, référencé par openapi.yaml.
+SendingDomainRecord:
+  type: object
+  description: One DNS record to publish exactly as given.
+  properties:
+    kind: { type: string, enum: [dkim, spf, dmarc] }
+    type: { type: string, example: TXT }
+    name: { type: string, example: vd202611a1b2c3._domainkey.client.fr }
+    value: { type: string, example: "v=DKIM1; k=rsa; p=MIIBIjANBg..." }
+    required: { type: boolean, description: "DKIM and SPF are required, DMARC is recommended" }
+    note: { type: string, description: "Short advice, in French (the console shows its own translated text)" }
+SendingDomainCheck:
+  type: object
+  description: Verdict of one record at the last DNS read.
+  properties:
+    kind: { type: string, enum: [dkim, spf, dmarc] }
+    ok: { type: boolean }
+    verdict: { type: string, enum: [pass, inherited, missing, mismatch, multiple, temperror] }
+    found: { type: array, items: { type: string }, description: "Records found, truncated" }
+    detail: { type: string }
+SendingDomain:
+  type: object
+  description: |
+    A sending domain of a workspace. The private key is never returned. `verified` means the published DKIM record carries
+    our public key: emails whose From is on this exact domain then leave signed d=<domain>.
+  properties:
+    id: { type: string }
+    workspace_id: { type: string }
+    domain: { type: string, example: client.fr }
+    selector: { type: string, example: vd202611a1b2c3 }
+    status: { type: string, enum: [pending, verified] }
+    complete: { type: boolean, description: "DKIM, SPF and DMARC all in place at the last check" }
+    checks: { type: array, items: { $ref: '#/SendingDomainCheck' } }
+    records: { type: array, items: { $ref: '#/SendingDomainRecord' } }
+    created_by: { type: string }
+    created_at: { type: string, format: date-time }
+    last_checked_at: { type: string, format: date-time, nullable: true }
+    verified_at: { type: string, format: date-time, nullable: true }
+    lost_at:
+      type: string
+      format: date-time
+      nullable: true
+      description: "The domain WAS verified and is no longer (key removed or changed), noticed at this date. Signing stopped."
+    lost_reason: { type: string, enum: [missing, mismatch], description: "DKIM verdict that made it fall" }

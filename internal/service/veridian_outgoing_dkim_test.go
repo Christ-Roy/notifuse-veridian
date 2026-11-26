@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/emersion/go-msgauth/dkim"
 	"github.com/stretchr/testify/assert"
@@ -25,11 +26,11 @@ type dkimKeys struct {
 	key        *rsa.PrivateKey
 }
 
-func (k dkimKeys) SigningKey(_ context.Context, ws, d string) (string, *rsa.PrivateKey, error) {
+func (k dkimKeys) SigningKey(_ context.Context, ws, d string) (*domauth.SigningKey, error) {
 	if ws == k.ws && d == k.domain {
-		return "vd202611abcdef", k.key, nil
+		return &domauth.SigningKey{ID: "d1", Selector: "vd202611abcdef", Key: k.key, LastChecked: time.Now()}, nil
 	}
-	return "", nil, nil
+	return nil, nil
 }
 
 // rawSink : serveur SMTP minimal qui garde le message OCTET POUR OCTET (le mock commun retire les blancs de tête des lignes, ce qui

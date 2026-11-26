@@ -24,8 +24,16 @@ fournisseur du client. Un client qui écrit « From: …@son-domaine.fr » par n
   relaxed/relaxed, rsa-sha256, From/To/Subject sur-signés. Le relais peut ajouter sa signature : deux signatures, DMARC prend l'alignée.
 - Échec de signature (base, `SECRET_KEY`) : journalisé, le mail part **tel quel** (comme avant). Jamais d'envoi bloqué pour ça.
 - Cache du signataire : une minute par (espace, domaine), vidé à la création, à la vérification et à la suppression.
-- Re-vérifier : clé retirée du DNS = retour « en attente », plus de signature ; DNS en panne (`temperror`) = statut gardé.
-  **Aucune revérification planifiée** (loi 2) : c'est le bouton ou `domains:verify`.
+- **Revérification à l'usage** (suite du 26/11, aucune tâche planifiée) : un envoi qui trouve un domaine vérifié dont le dernier
+  contrôle a plus de 24 h lance un contrôle DNS en tâche de fond (`Signer.maybeRecheck`, `Rechecker`) : un seul à la fois par domaine,
+  au plus un par 24 h et par processus, l'envoi n'attend pas. Clé absente (NXDOMAIN, pas de TXT) ou différente : le domaine passe
+  « en attente », `lost_at` (date du constat) et `lost_reason` (`missing`, `mismatch`) sont posés (V84), le cache est vidé : plus de
+  signature. Panne DNS passagère (SERVFAIL, délai) : statut gardé, contrôle daté. Le bouton Vérifier (ou `domains:verify`) ramène le
+  domaine et efface le constat. La console montre « Signature coupée le … » et le motif ; la CLI `domains` aussi.
+- Console : conseils et motifs traduits côté console (lingui), jamais le texte français du serveur (`note`, `detail` restent pour l'API).
+- OpenAPI : `openapi/paths/veridian-domains.yaml`, schémas `veridian-domains.yaml`, bundle `openapi.json`. `TestOpenAPI_DocumenteChaqueRoute`
+  échoue si une route de `domauth.Routes` (ou sa méthode) manque. Dette relevée : 35 `$ref` cassés dans `veridian-policy.yaml` et
+  `veridian-reservoir.yaml` (bundle seulement avec `--force`).
 - SPF vérifié en vrai : chaque IP de notre include passe `check_host` du domaine (include, ip4 recopiée, redirect : la forme importe peu).
   Un relais neuf = son IP dans `_spf-envoi`, pour tous les clients d'un coup.
 - Règle 9 : aucune réponse ne porte la clé privée, ni claire ni chiffrée (`Domain` ne la contient pas, test `TestAPI_ParcoursEtRedaction`).

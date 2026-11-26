@@ -46,6 +46,14 @@ type View struct {
 	Records  []Record `json:"records"`
 }
 
+// Routes : méthode, chemin. La liste fait foi pour le routeur, et TestOpenAPI_DocumenteChaqueRoute exige chacune dans openapi/.
+var Routes = [][2]string{
+	{"GET", "/api/veridian/sendingDomains.list"},
+	{"POST", "/api/veridian/sendingDomains.create"},
+	{"POST", "/api/veridian/sendingDomains.verify"},
+	{"POST", "/api/veridian/sendingDomains.delete"},
+}
+
 // RegisterRoutes branche les routes.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/veridian/sendingDomains.list", h.RequireAuth(http.HandlerFunc(h.list)))

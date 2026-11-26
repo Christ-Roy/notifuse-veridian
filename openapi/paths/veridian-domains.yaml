@@ -1,0 +1,125 @@
+# Domaines d'envoi authentifiés (VER-166, fiche 97) : routes /api/veridian/sendingDomains.*. Écrit à la main, référencé par openapi.yaml.
+# TestOpenAPI_DocumenteChaqueRoute (internal/veridian/domauth) échoue si une route du module manque ici.
+/api/veridian/sendingDomains.list:
+  get:
+    summary: "Sending domains of a workspace, with the DNS records to publish"
+    description: |
+      Veridian extension. Each domain comes with its exact records (DKIM TXT, SPF with our include, recommended DMARC) and the
+      verdicts of the last DNS read. A verified domain whose DKIM record is older than 24 hours is re-checked by the next email
+      sent from it (never on a schedule); a removed or changed key makes it fall back to `pending` with `lost_at` and `lost_reason`.
+
+      Requires `workspace:read`.
+    operationId: veridianSendingDomainsList
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: workspace_id
+        in: query
+        required: true
+        schema: { type: string }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                domains: { type: array, items: { $ref: '../components/schemas/veridian-domains.yaml#/SendingDomain' } }
+                spf_include: { type: string, example: _spf-envoi.veridian.site }
+      '400': { description: workspace_id missing }
+      '401': { description: Not a member of this workspace }
+      '403': { description: Missing permission }
+/api/veridian/sendingDomains.create:
+  post:
+    summary: "Declare a sending domain: generates its DKIM key (RSA-2048) and returns the records to publish"
+    description: |
+      The private key is encrypted at rest and never returned. At most 20 domains per workspace. Requires `workspace:write`.
+    operationId: veridianSendingDomainsCreate
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id, domain]
+            properties:
+              workspace_id: { type: string }
+              domain: { type: string, example: client.fr }
+    responses:
+      '201':
+        description: Created, waiting for DNS
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                domain: { $ref: '../components/schemas/veridian-domains.yaml#/SendingDomain' }
+      '400': { description: Invalid domain name }
+      '401': { description: Not a member of this workspace }
+      '403': { description: Missing permission }
+      '409': { description: Already declared in this workspace, or 20 domains reached }
+/api/veridian/sendingDomains.verify:
+  post:
+    summary: "Read the DNS of a sending domain now (DKIM, SPF, DMARC)"
+    description: |
+      DKIM matching our public key = verified, signing on. A transient DNS error keeps the previous status.
+      Requires `workspace:write`.
+    operationId: veridianSendingDomainsVerify
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id, id]
+            properties:
+              workspace_id: { type: string }
+              id: { type: string }
+    responses:
+      '200':
+        description: Verdicts saved
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                domain: { $ref: '../components/schemas/veridian-domains.yaml#/SendingDomain' }
+      '400': { description: id missing }
+      '401': { description: Not a member of this workspace }
+      '403': { description: Missing permission }
+      '404': { description: No such domain in this workspace }
+/api/veridian/sendingDomains.delete:
+  post:
+    summary: "Remove a sending domain and its key (emails are no longer signed for it)"
+    description: Requires `workspace:write`.
+    operationId: veridianSendingDomainsDelete
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [workspace_id, id]
+            properties:
+              workspace_id: { type: string }
+              id: { type: string }
+    responses:
+      '200':
+        description: Removed
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deleted: { type: string }
+                domain: { type: string }
+      '401': { description: Not a member of this workspace }
+      '403': { description: Missing permission }
+      '404': { description: No such domain in this workspace }

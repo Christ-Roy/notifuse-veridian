@@ -13,6 +13,7 @@ export interface DomainRecord {
   name: string
   value: string
   required: boolean
+  /** Conseil du serveur, en français : la console affiche le sien, traduit (recordNote). */
   note?: string
 }
 
@@ -37,6 +38,9 @@ export interface SendingDomain {
   created_at: string
   last_checked_at?: string
   verified_at?: string
+  /** Le domaine ÉTAIT vérifié et ne l'est plus (clé retirée ou changée), constaté à cette date : signature coupée. */
+  lost_at?: string
+  lost_reason?: 'missing' | 'mismatch' | string
 }
 
 export interface SendingDomainList {
@@ -60,4 +64,10 @@ export const sendingDomainsService = {
 /** Le verdict d'un enregistrement au dernier contrôle, ou undefined s'il n'a jamais été vérifié. */
 export function checkOf(d: SendingDomain, kind: DomainRecordKind): DomainCheck | undefined {
   return (d.checks ?? []).find((c) => c.kind === kind)
+}
+
+/** L'include SPF à ajouter, lu dans la valeur publiée (« include:… »). */
+export function spfInclude(value: string): string {
+  const m = /include:(\S+)/.exec(value)
+  return m ? m[1] : ''
 }

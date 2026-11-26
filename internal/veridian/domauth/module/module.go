@@ -35,7 +35,24 @@ func wire(h platform.Host) error {
 		log.WithFields(map[string]interface{}{"workspace_id": ws, "domain": d, "error": err.Error()}).Error("DKIM: signature impossible, mail envoyé sans notre signature")
 	}}
 	include := Include(os.Getenv)
-	api := &domauth.Handler{Store: store, DNS: &domauth.Verifier{Include: include}, Include: include, Log: log, RequireAuth: h.RequireAuth(),
+	dns := &domauth.Verifier{Include: include}
+	// Revérification à l'usage (au plus une fois par 24 h et par domaine, déclenchée par un envoi, jamais planifiée).
+	signer.Recheck = (&domauth.Rechecker{Store: store, DNS: dns, OnResult: func(ws string, before, after *domauth.Domain, err error) {
+		f := map[string]interface{}{"workspace_id": ws}
+		if err != nil {
+			f["error"] = err.Error()
+			log.WithFields(f).Error("DKIM: revérification à l'usage impossible")
+			return
+		}
+		f["domain"], f["before"], f["after"] = after.Domain, before.Status, after.Status
+		if before.Status == domauth.StatusVerified && after.Status != domauth.StatusVerified {
+			f["reason"] = after.LostReason
+			log.WithFields(f).Warn("DKIM: domaine d'envoi plus vérifié, signature coupée")
+			return
+		}
+		log.WithFields(f).Info("DKIM: revérification à l'usage")
+	}}).Run
+	api := &domauth.Handler{Store: store, DNS: dns, Include: include, Log: log, RequireAuth: h.RequireAuth(),
 		Auth: mailapi.DomainAuthorizer{Auth: h.AuthService(), Standing: &standing.Store{DB: h.DB()}}, Changed: signer.Forget}
 	api.RegisterRoutes(h.Mux())
 	service.SetVeridianOutgoingSigner(signer.Sign)

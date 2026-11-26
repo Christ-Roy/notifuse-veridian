@@ -45,25 +45,26 @@ func TestStore_CleChiffreeEtSignatureSeulementVerifie(t *testing.T) {
 	assert.NotContains(t, enc, "PRIVATE KEY", "la clé privée n'est jamais en clair en base")
 
 	// En attente : aucune clé pour signer.
-	sel, k, err := s.SigningKey(ctx, "wsa", "client.fr")
+	k, err := s.SigningKey(ctx, "wsa", "client.fr")
 	require.NoError(t, err)
 	assert.Nil(t, k)
-	assert.Empty(t, sel)
 
 	_, err = s.SaveCheck(ctx, "wsa", d.ID, StatusVerified, []Check{{Kind: KindDKIM, OK: true, Verdict: "pass"}})
 	require.NoError(t, err)
-	sel, k, err = s.SigningKey(ctx, "wsa", "CLIENT.fr")
+	k, err = s.SigningKey(ctx, "wsa", "CLIENT.fr")
 	require.NoError(t, err)
 	require.NotNil(t, k)
-	assert.Equal(t, d.Selector, sel)
+	assert.Equal(t, d.Selector, k.Selector)
+	assert.Equal(t, d.ID, k.ID)
+	assert.False(t, k.LastChecked.IsZero(), "la date du dernier contrôle part avec la clé : la revérification à l'usage en dépend")
 
 	// Garde d'espace : le même domaine vérifié dans A ne signe rien pour B.
-	_, k, err = s.SigningKey(ctx, "wsb", "client.fr")
+	k, err = s.SigningKey(ctx, "wsb", "client.fr")
 	require.NoError(t, err)
 	assert.Nil(t, k)
 
 	// Mauvaise SECRET_KEY : erreur, jamais une clé fausse.
-	_, _, err = (&Store{DB: db, Secret: "autre"}).SigningKey(ctx, "wsa", "client.fr")
+	_, err = (&Store{DB: db, Secret: "autre"}).SigningKey(ctx, "wsa", "client.fr")
 	assert.Error(t, err)
 }
 

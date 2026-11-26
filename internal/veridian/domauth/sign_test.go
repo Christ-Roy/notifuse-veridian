@@ -92,10 +92,13 @@ type keys struct {
 	asked []string
 }
 
-func (k *keys) SigningKey(_ context.Context, ws, domain string) (string, *rsa.PrivateKey, error) {
+func (k *keys) SigningKey(_ context.Context, ws, domain string) (*SigningKey, error) {
 	k.calls++
 	k.asked = append(k.asked, ws+"|"+domain)
-	return k.sel, k.key, k.err
+	if k.err != nil || k.key == nil {
+		return nil, k.err
+	}
+	return &SigningKey{ID: "d1", Selector: k.sel, Key: k.key, LastChecked: time.Now()}, nil
 }
 
 func TestSigner_SigneSeulementUnDomaineVerifie(t *testing.T) {

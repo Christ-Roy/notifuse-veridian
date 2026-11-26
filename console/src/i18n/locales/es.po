@@ -712,6 +712,10 @@ msgstr ""
 msgid "A tree is required"
 msgstr "Se requiere un árbol"
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "A TXT record exists but does not carry our public key: copy the whole value again."
+msgstr ""
+
 #: src/components/segment/input.tsx
 msgid "A value is required..."
 msgstr "Se requiere un valor..."
@@ -1247,6 +1251,10 @@ msgstr "Todos los lados"
 #: src/pages/SetupWizard.tsx
 msgid "Allow receiving emails to trigger transactional notifications. Requires TLS certificates."
 msgstr "Permitir recibir correos para activar notificaciones transaccionales. Requiere certificados TLS."
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Allows our relays to send for you. A domain has only one SPF record: if one already exists, add \"include:{include}\" to it, before the \"all\"."
+msgstr ""
 
 #: src/components/settings/CustomFieldsConfiguration.tsx
 msgid "already set"
@@ -4217,6 +4225,10 @@ msgstr ""
 #: src/components/settings/GeneralSettings.tsx
 msgid "DNS Record Required:"
 msgstr "Registro DNS requerido:"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "DNS unreachable, nothing concluded: try again in a moment."
+msgstr ""
 
 #: src/components/settings/veridian_sending_domains.tsx
 msgid "DNS unreachable, try again"
@@ -8450,6 +8462,10 @@ msgstr "No hay remitente predeterminado configurado"
 msgid "No discrepancy: everything matches."
 msgstr ""
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "No DMARC policy: recommended, without it Gmail and Yahoo filter more strictly."
+msgstr ""
+
 #: src/components/templates/TemplatePreviewDrawer.tsx
 msgid "no email"
 msgstr "sin correo"
@@ -8730,6 +8746,10 @@ msgstr "No se encontraron notificaciones transaccionales"
 #: src/components/automations/AutomationCard.tsx
 msgid "No trigger configured"
 msgstr "No hay disparador configurado"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "No TXT record at this name yet."
+msgstr ""
 
 #: src/pages/SendingProfilesPage.tsx
 msgid "No unlinked inbox"
@@ -10445,6 +10465,10 @@ msgstr "Recomendado"
 #: src/pages/BroadcastsPage.tsx
 msgid "Recommended Winner"
 msgstr "Ganador recomendado"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Recommended. Start with p=none, then move to p=quarantine once the reports are clean. If one already exists, keep it."
+msgstr ""
 
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
@@ -12210,6 +12234,10 @@ msgstr "¡Configuración completa!"
 msgid "Several SPF records (invalid)"
 msgstr ""
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Several SPF records: receivers ignore all of them. Merge them into one."
+msgstr ""
+
 #: src/components/send_queue/veridian_queue_reasons.tsx
 msgid "Share"
 msgstr ""
@@ -12299,6 +12327,19 @@ msgstr "Cerrando sesión..."
 
 #: src/components/automations/config/WebhookConfigForm.tsx
 msgid "Signing Secret"
+msgstr ""
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Signing stopped"
+msgstr ""
+
+#. placeholder {0}: dayjs(domain.lost_at).format('LLL')
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Signing stopped on {0}"
+msgstr ""
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Signs your emails. Publish it as is; some DNS hosts want the name without the domain ({shortName})."
 msgstr ""
 
 #: src/components/settings/WebhooksSettings.tsx
@@ -13257,6 +13298,14 @@ msgstr ""
 msgid "The default sending policy applied to every campaign and every sending infrastructure, unless overridden below."
 msgstr ""
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "The DKIM record of this domain no longer carries our key. Emails from this domain now leave without our signature. Publish the DKIM value below again, then click Verify."
+msgstr ""
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "The DKIM record of this domain was removed. Emails from this domain now leave without our signature. Publish the DKIM record below again, then click Verify."
+msgstr ""
+
 #~ msgid "The email address that will be used as the SMTP user for authentication"
 #~ msgstr "La dirección de correo que se usará como usuario SMTP para autenticación"
 
@@ -13434,6 +13483,10 @@ msgstr ""
 
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 msgid "The server refused the test message."
+msgstr ""
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "The SPF record does not authorize our relays: add include:{include}."
 msgstr ""
 
 #: src/components/automations/config/AddToListConfigForm.tsx
@@ -13622,6 +13675,10 @@ msgstr "Este contacto no está suscrito a ninguna lista"
 
 #: src/components/mail/veridian_mail_body.tsx
 msgid "This delivery report carries no readable body: see the explanation above."
+msgstr ""
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "This domain has no SPF record."
 msgstr ""
 
 #: src/components/settings/veridian_sending_domains.tsx

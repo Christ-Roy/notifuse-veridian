@@ -86,6 +86,10 @@ type Domain struct {
 	CreatedAt     time.Time  `json:"created_at"`
 	LastCheckedAt *time.Time `json:"last_checked_at,omitempty"`
 	VerifiedAt    *time.Time `json:"verified_at,omitempty"`
+	// LostAt, LostReason : le domaine ÉTAIT vérifié et ne l'est plus (clé DKIM retirée : missing, ou changée : mismatch), constaté à cette
+	// date par une vérification (bouton, route ou revérification à l'usage). Remis à zéro quand il redevient vérifié.
+	LostAt     *time.Time `json:"lost_at,omitempty"`
+	LostReason string     `json:"lost_reason,omitempty"`
 }
 
 // Complete : DKIM, SPF et DMARC relevés conformes au dernier contrôle.

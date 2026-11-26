@@ -712,6 +712,10 @@ msgstr "Un message de test a été envoyé à {ownerEmail}. À quoi doit servir 
 msgid "A tree is required"
 msgstr "Un arbre est requis"
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "A TXT record exists but does not carry our public key: copy the whole value again."
+msgstr "Un TXT existe mais ne porte pas notre clé publique : recopiez la valeur entière."
+
 #: src/components/segment/input.tsx
 msgid "A value is required..."
 msgstr "Une valeur est requise..."
@@ -1247,6 +1251,10 @@ msgstr "Tous les côtés"
 #: src/pages/SetupWizard.tsx
 msgid "Allow receiving emails to trigger transactional notifications. Requires TLS certificates."
 msgstr "Autoriser la réception d'emails pour déclencher des notifications transactionnelles. Nécessite des certificats TLS."
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Allows our relays to send for you. A domain has only one SPF record: if one already exists, add \"include:{include}\" to it, before the \"all\"."
+msgstr "Autorise nos relais à envoyer pour vous. Un domaine n'a qu'un seul SPF : s'il en existe déjà un, ajoutez-y « include:{include} » avant le « all »."
 
 #: src/components/settings/CustomFieldsConfiguration.tsx
 msgid "already set"
@@ -4217,6 +4225,10 @@ msgstr "Politique DMARC"
 #: src/components/settings/GeneralSettings.tsx
 msgid "DNS Record Required:"
 msgstr "Enregistrement DNS requis :"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "DNS unreachable, nothing concluded: try again in a moment."
+msgstr "DNS injoignable, rien n'est conclu : réessayez dans un instant."
 
 #: src/components/settings/veridian_sending_domains.tsx
 msgid "DNS unreachable, try again"
@@ -8450,6 +8462,10 @@ msgstr "Aucun expéditeur par défaut configuré"
 msgid "No discrepancy: everything matches."
 msgstr "Aucun écart : tout concorde."
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "No DMARC policy: recommended, without it Gmail and Yahoo filter more strictly."
+msgstr "Aucune politique DMARC : recommandée, sans elle Gmail et Yahoo trient plus sévèrement."
+
 #: src/components/templates/TemplatePreviewDrawer.tsx
 msgid "no email"
 msgstr "pas d'email"
@@ -8730,6 +8746,10 @@ msgstr "Aucune notification transactionnelle trouvée"
 #: src/components/automations/AutomationCard.tsx
 msgid "No trigger configured"
 msgstr "Aucun déclencheur configuré"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "No TXT record at this name yet."
+msgstr "Aucun enregistrement TXT à ce nom pour l'instant."
 
 #: src/pages/SendingProfilesPage.tsx
 msgid "No unlinked inbox"
@@ -10445,6 +10465,10 @@ msgstr "Recommandé"
 #: src/pages/BroadcastsPage.tsx
 msgid "Recommended Winner"
 msgstr "Gagnant recommandé"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Recommended. Start with p=none, then move to p=quarantine once the reports are clean. If one already exists, keep it."
+msgstr "Recommandé. Commencez en p=none, passez à p=quarantine quand les rapports sont propres. S'il en existe déjà un, gardez-le."
 
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
@@ -12210,6 +12234,10 @@ msgstr "Configuration terminée !"
 msgid "Several SPF records (invalid)"
 msgstr "Plusieurs SPF (invalide)"
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Several SPF records: receivers ignore all of them. Merge them into one."
+msgstr "Plusieurs SPF : les serveurs les ignorent tous. Fusionnez-les en un seul."
+
 #: src/components/send_queue/veridian_queue_reasons.tsx
 msgid "Share"
 msgstr "Part"
@@ -12300,6 +12328,19 @@ msgstr "Déconnexion en cours..."
 #: src/components/automations/config/WebhookConfigForm.tsx
 msgid "Signing Secret"
 msgstr "Secret de signature"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Signing stopped"
+msgstr "Signature coupée"
+
+#. placeholder {0}: dayjs(domain.lost_at).format('LLL')
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Signing stopped on {0}"
+msgstr "Signature coupée le {0}"
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "Signs your emails. Publish it as is; some DNS hosts want the name without the domain ({shortName})."
+msgstr "Signe vos mails. À publier tel quel ; certains hébergeurs DNS veulent le nom sans le domaine ({shortName})."
 
 #: src/components/settings/WebhooksSettings.tsx
 msgid "Signup"
@@ -13257,6 +13298,14 @@ msgstr "Le tableau de bord n'a pas pu charger vos métriques email. C'est géné
 msgid "The default sending policy applied to every campaign and every sending infrastructure, unless overridden below."
 msgstr "La politique d'envoi par défaut appliquée à chaque campagne et à chaque infrastructure d'envoi, sauf remplacement ci-dessous."
 
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "The DKIM record of this domain no longer carries our key. Emails from this domain now leave without our signature. Publish the DKIM value below again, then click Verify."
+msgstr "L'enregistrement DKIM de ce domaine ne porte plus notre clé. Les mails de ce domaine partent désormais sans notre signature. Republiez la valeur DKIM ci-dessous, puis cliquez sur Vérifier."
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "The DKIM record of this domain was removed. Emails from this domain now leave without our signature. Publish the DKIM record below again, then click Verify."
+msgstr "L'enregistrement DKIM de ce domaine a été retiré. Les mails de ce domaine partent désormais sans notre signature. Republiez l'enregistrement DKIM ci-dessous, puis cliquez sur Vérifier."
+
 #~ msgid "The email address that will be used as the SMTP user for authentication"
 #~ msgstr "L'adresse email qui sera utilisée comme utilisateur SMTP pour l'authentification"
 
@@ -13435,6 +13484,10 @@ msgstr "Le serveur a refusé le message pour une raison de politique (5.7.x : fi
 #: src/components/sending_profiles/veridian_profile_wizard.tsx
 msgid "The server refused the test message."
 msgstr "Le serveur a refusé le message de test."
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "The SPF record does not authorize our relays: add include:{include}."
+msgstr "Le SPF n'autorise pas nos relais : ajoutez include:{include}."
 
 #: src/components/automations/config/AddToListConfigForm.tsx
 msgid "The status to assign when adding to the list"
@@ -13623,6 +13676,10 @@ msgstr "Ce contact n'est abonné à aucune liste"
 #: src/components/mail/veridian_mail_body.tsx
 msgid "This delivery report carries no readable body: see the explanation above."
 msgstr "Ce rapport de livraison n'a pas de corps lisible : voir l'explication ci-dessus."
+
+#: src/components/settings/veridian_sending_domains.tsx
+msgid "This domain has no SPF record."
+msgstr "Ce domaine n'a pas de SPF."
 
 #: src/components/settings/veridian_sending_domains.tsx
 msgid "This domain is already declared in this workspace."

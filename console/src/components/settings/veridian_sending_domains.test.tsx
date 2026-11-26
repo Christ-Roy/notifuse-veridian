@@ -37,7 +37,7 @@ const dom = (over: Partial<SendingDomain> = {}): SendingDomain => ({
   complete: false,
   checks: [{ kind: 'dkim', ok: false, verdict: 'missing', detail: 'aucun enregistrement TXT' }],
   records: [
-    { kind: 'dkim', type: 'TXT', name: 'vd202611abcdef._domainkey.client.fr', value: DKIM_VALUE, required: true },
+    { kind: 'dkim', type: 'TXT', name: 'vd202611abcdef._domainkey.client.fr', value: DKIM_VALUE, required: true, note: 'NOTE SERVEUR EN FRANÇAIS' },
     { kind: 'spf', type: 'TXT', name: 'client.fr', value: 'v=spf1 include:_spf-envoi.veridian.site ~all', required: true },
     { kind: 'dmarc', type: 'TXT', name: '_dmarc.client.fr', value: 'v=DMARC1; p=none; adkim=r; aspf=r', required: false }
   ],
@@ -83,7 +83,12 @@ describe('VeridianSendingDomains', () => {
     expect(screen.getByText(DKIM_VALUE)).toBeTruthy()
     expect(screen.getByText('v=spf1 include:_spf-envoi.veridian.site ~all')).toBeTruthy()
     expect(screen.getByText('Not found')).toBeTruthy()
-    expect(screen.getByText('aucun enregistrement TXT')).toBeTruthy()
+    // Motifs et conseils dans la langue du compte : jamais le texte français du serveur.
+    expect(screen.getByText('No TXT record at this name yet.')).toBeTruthy()
+    expect(screen.queryByText('aucun enregistrement TXT')).toBeNull()
+    expect(screen.queryByText('NOTE SERVEUR EN FRANÇAIS')).toBeNull()
+    expect(screen.getByText(/some DNS hosts want the name without the domain \(vd202611abcdef\._domainkey\)/)).toBeTruthy()
+    expect(screen.getByText(/add "include:_spf-envoi\.veridian\.site" to it/)).toBeTruthy()
     expect(vi.mocked(api.get).mock.calls[0][0]).toBe('/api/veridian/sendingDomains.list?workspace_id=ws1')
   })
 
@@ -122,6 +127,27 @@ describe('VeridianSendingDomains', () => {
     expect(await screen.findByText('Verified: emails are signed')).toBeTruthy()
     expect(screen.getByText('DKIM, SPF and DMARC in place')).toBeTruthy()
     expect(screen.getAllByText('In place')).toHaveLength(3)
+  })
+
+  it('shows when and why signing stopped, with Verify to come back', async () => {
+    mockApi({
+      domains: [
+        dom({
+          status: 'pending',
+          lost_at: '2026-11-26T20:15:00Z',
+          lost_reason: 'missing',
+          last_checked_at: '2026-11-26T20:15:00Z',
+          checks: [{ kind: 'dkim', ok: false, verdict: 'missing', detail: 'aucun enregistrement TXT' }]
+        })
+      ],
+      spf_include: '_spf-envoi.veridian.site'
+    })
+    renderScreen()
+    expect(await screen.findByText('Signing stopped')).toBeTruthy()
+    expect(screen.queryByText('Waiting for DNS')).toBeNull()
+    expect(screen.getByText(/^Signing stopped on /)).toBeTruthy()
+    expect(screen.getByText(/The DKIM record of this domain was removed/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Verify/ })).toBeTruthy()
   })
 
   it('explains a refused domain name', async () => {
