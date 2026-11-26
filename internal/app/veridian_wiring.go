@@ -1081,6 +1081,10 @@ func (a *App) veridianWrapHandler(handler http.Handler) http.Handler {
 	// économiser les round-trips DB sur les routes communes.
 	handler = middleware.VeridianSpaceGateWithCache(a.veridianPaywallCache, a.veridianPlanRepo, a.config.HubAPISecret, a.logger)(handler)
 
+	// Désinscription en un clic de l'en-tête List-Unsubscribe (RFC 8058) : le POST formulaire d'un client mail devient la
+	// requête JSON du handler upstream (mesuré en prod le 26/11 : 400 sur chaque clic). Cf. veridian_oneclick_unsubscribe.go.
+	handler = middleware.VeridianOneClickUnsubscribe(handler)
+
 	// === Freeze member per-user (CONTRAT-HUB §5.21, 2026-05-25) ===
 	// Wrappe le handler GLOBAL : si user frozen sur le workspace courant,
 	//   - GET/HEAD/OPTIONS : reads obfusques (header X-User-Frozen=true)

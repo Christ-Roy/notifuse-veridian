@@ -940,6 +940,7 @@ func BuildTemplateData(req TemplateDataRequest) (MapOfAny, error) {
 		oneclickParams.Set("lids", req.ContactWithList.ListID)
 		oneclickParams.Set("wid", req.WorkspaceID)
 		oneclickParams.Set("mid", req.MessageID)
+		oneclickParams.Set("email_hmac", emailHMAC) // Veridian 26/11 : sans lui, le service refuse toute désinscription en un clic
 
 		oneclickUnsubscribeURL := fmt.Sprintf("%s/unsubscribe-oneclick?%s",
 			req.TrackingSettings.Endpoint, oneclickParams.Encode())

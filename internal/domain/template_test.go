@@ -1751,6 +1751,13 @@ func TestBuildTemplateData(t *testing.T) {
 		assert.Contains(t, unsubscribeURL, "wid=ws-123")
 		assert.Contains(t, unsubscribeURL, "mid=msg-456")
 
+		// Veridian 26/11 : l'URL de l'en-tête List-Unsubscribe (un clic) porte le HMAC de l'adresse, sans lequel le service
+		// refuse toute désinscription (mesuré en prod : aucune désinscription en un clic n'aboutissait).
+		oneclickURL, ok := data["oneclick_unsubscribe_url"].(string)
+		assert.True(t, ok)
+		assert.Contains(t, oneclickURL, "/unsubscribe-oneclick?")
+		assert.Contains(t, oneclickURL, "email_hmac=")
+
 		// Check tracking data
 		assert.Equal(t, messageID, data["message_id"])
 

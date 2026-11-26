@@ -32,3 +32,11 @@ Salve de 6 lots (team-orchestration) sur le backlog cold + sécu + admin :
 | `internal/domain/veridian.go` | interface `VeridianPlanRepository` += `ListAllIDs(ctx, limit)` |
 | `internal/app/app.go` | +câblage endpoint `templates.deliverabilityScore` (handler+service veridian) |
 
+
+## Désinscription en un clic (RFC 8058), réparée le 26/11/2026
+Mesuré en prod par le parcours Mail de bout en bout : le POST sur l'URL de l'en-tête `List-Unsubscribe` rendait 400, donc aucune
+désinscription en un clic n'aboutissait (exigence Gmail et Yahoo pour les envois en nombre). Deux causes : l'URL ne portait pas
+`email_hmac` (que le service exige), et le handler upstream ne lit que du JSON alors qu'un client mail envoie le formulaire
+`List-Unsubscribe=One-Click`. Correctif : `email_hmac` posé dans l'URL (`domain/template.go`) et `VeridianOneClickUnsubscribe`
+(`internal/http/middleware/`) qui convertit le formulaire en la requête JSON du handler, vérification HMAC inchangée. Les mails
+partis avant le 26/11 portent une URL sans HMAC : leur lien un-clic reste sans effet (le lien du pied de mail, lui, marche).
