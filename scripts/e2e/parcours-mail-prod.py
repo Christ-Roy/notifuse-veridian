@@ -11,8 +11,8 @@ Usage : parcours_mail_prod.py --real-send [--reprendre etat.json]
 Sortie 0 = parcours prouvé, 1 = écart, 2 = non abouti."""
 import argparse, json, os, re, subprocess, sys, time, urllib.request, urllib.error
 
-WS = "e2esso4vvfrlwdlctavc"  # org jetable PROD du Hub (tenant 5b01dd7d-2249-4d88-b80c-bb5a2c637050, née le 26/11 10:52Z), tenue jusqu'au « fini »
-HUB_TENANT = "5b01dd7d-2249-4d88-b80c-bb5a2c637050"
+WS = "e2esso1ibnvwkiz8edd1"  # org jetable PROD du Hub (tenant d7ee68e0-1635-4845-b04a-2076eb0caceb, née le 26/11 10:57Z, tenue 25 h), jusqu'au « fini »
+HUB_TENANT = "d7ee68e0-1635-4845-b04a-2076eb0caceb"
 DOM = "messagerie-nord-776.fr"
 CLASSES = ("corporate", "corporate_selfhost", "other_hoster", "google", "microsoft", "orange", "free", "sfr", "laposte", "ovh", "ionos", "yahoo", "apple", "gmx")
 HERE = os.path.dirname(os.path.abspath(__file__))
