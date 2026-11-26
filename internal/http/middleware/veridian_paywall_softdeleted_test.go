@@ -499,7 +499,9 @@ func TestIsSoftDeletedExemptPath(t *testing.T) {
 		want bool
 	}{
 		{"/api/veridian/admin/cache/invalidate", true},
-		{"/api/veridian/", true},
+		{"/api/veridian/", false},                    // 26/11 : seul l'admin Hub reste exempté par son chemin
+		{"/api/veridian/mail.mailboxes.list", false}, // route de l'utilisateur
+		{"/api/veridian/contacts.intake", false},     // route de l'utilisateur
 		{"/api/tenants/abc/restore", true},
 		{"/api/tenants/", true},
 		{"/api/health", true},
@@ -510,7 +512,7 @@ func TestIsSoftDeletedExemptPath(t *testing.T) {
 		{"/api/transactional.send", false},
 		{"/api/broadcasts.create", false},
 		{"/api/tenant.profile", false}, // pas /api/tenants/ (singulier)
-		{"/api/veridia/foo", false},     // typo : pas /api/veridian/
+		{"/api/veridia/foo", false},    // typo : pas /api/veridian/
 		{"/", false},
 		{"", false},
 	}
@@ -544,4 +546,66 @@ func (e assertErr) Error() string { return string(e) }
 
 func sqlNoRows() error {
 	return sql.ErrNoRows
+}
+
+// === Organisation suspendue (VER-245, défaut mesuré en prod par le Hub le 26/11 : la session lisait encore) ===
+
+func orgSuspendedPlan(ws string) *domain.VeridianPlan {
+	at := time.Now().Add(-time.Minute)
+	return &domain.VeridianPlan{WorkspaceID: ws, Plan: "pro", Status: domain.PlanStatusSuspended, SuspendedAt: &at, SuspendedReason: "admin_action"}
+}
+
+func runGate(t *testing.T, plan *domain.VeridianPlan, req *http.Request) (*httptest.ResponseRecorder, bool) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mocks.NewMockVeridianPlanRepository(ctrl)
+	repo.EXPECT().Get(gomock.Any(), gomock.Any()).Return(plan, nil).AnyTimes()
+	var called atomic.Bool
+	mw := VeridianSpaceGateWithCache(NewPaywallCache(), repo, testHubSecret, logger.NewLogger())(jsonHandler(map[string]interface{}{"ok": true}, &called))
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, req)
+	return rec, called.Load()
+}
+
+func TestVeridianSpaceGate_OrganisationSuspendue_ToutSeFerme(t *testing.T) {
+	for _, req := range []*http.Request{
+		httptest.NewRequest(http.MethodGet, "/api/contacts.list?workspace_id=ws&limit=1", nil),
+		httptest.NewRequest(http.MethodGet, "/api/veridian/mail.mailboxes.list?workspace_id=ws", nil),
+		httptest.NewRequest(http.MethodPost, "/api/veridian/contacts.intake", strings.NewReader(`{"workspace_id":"ws","contacts":[]}`)),
+		httptest.NewRequest(http.MethodPost, "/api/contacts.upsert", strings.NewReader(`{"workspace_id":"ws"}`)),
+	} {
+		rec, called := runGate(t, orgSuspendedPlan("ws"), req)
+		assert.Equal(t, http.StatusLocked, rec.Code, req.URL.String())
+		assert.False(t, called, req.URL.String())
+		assert.Contains(t, rec.Body.String(), "workspace_suspended")
+	}
+}
+
+func TestVeridianSpaceGate_SuspensionDeFacturation_LecturePasse(t *testing.T) {
+	p := orgSuspendedPlan("ws")
+	p.SuspendedReason = "billing_past_due"
+	rec, called := runGate(t, p, httptest.NewRequest(http.MethodGet, "/api/contacts.list?workspace_id=ws", nil))
+	assert.Equal(t, 200, rec.Code)
+	assert.True(t, called, "la suspension de facturation ne bloque que les envois (paywall)")
+}
+
+func TestVeridianSpaceGate_HubSigneExempteFauxSigneNon(t *testing.T) {
+	signed := httptest.NewRequest(http.MethodGet, "/api/veridian/membres?workspace_id=ws", nil)
+	SignVeridianHubRequest(signed, testHubSecret, nil)
+	rec, called := runGate(t, orgSuspendedPlan("ws"), signed)
+	assert.Equal(t, 200, rec.Code, "le Hub doit pouvoir lire et reprendre un espace suspendu")
+	assert.True(t, called)
+
+	fake := httptest.NewRequest(http.MethodGet, "/api/veridian/membres?workspace_id=ws", nil)
+	fake.Header.Set("X-Veridian-Hub-Signature", "deadbeef")
+	fake.Header.Set("X-Veridian-Timestamp", "1")
+	rec, called = runGate(t, orgSuspendedPlan("ws"), fake)
+	assert.Equal(t, http.StatusLocked, rec.Code, "un en-tête bidon n'exempte pas")
+	assert.False(t, called)
+}
+
+func TestVeridianSpaceGate_EspaceSupprime_RoutesVeridianDeLUtilisateurFermees(t *testing.T) {
+	rec, called := runGate(t, deletedPlan("ws"), httptest.NewRequest(http.MethodPost, "/api/veridian/mail.messages.send", strings.NewReader(`{"workspace_id":"ws"}`)))
+	assert.Equal(t, http.StatusPaymentRequired, rec.Code)
+	assert.False(t, called)
 }

@@ -15,7 +15,7 @@ import (
 // State : situation relue en base.
 type State struct {
 	Workspace bool // l'espace existe
-	Closed    bool // espace supprimé côté Hub (soft-delete) : ni lecture ni écriture
+	Closed    bool // espace supprimé côté Hub (soft-delete) ou organisation suspendue (admin_action) : ni lecture ni écriture
 	Suspended bool // espace suspendu : lecture seule (CONTRAT-HUB §5.4)
 	Member    bool
 	Frozen    bool // membre gelé (§5.21)
@@ -39,7 +39,8 @@ func (s *Store) Of(ctx context.Context, workspaceID, userID string) (State, erro
 		uid = id
 	}
 	err := s.DB.QueryRowContext(ctx, `
-		SELECT COALESCE(p.deleted_at IS NOT NULL OR p.status = 'deleted', FALSE), COALESCE(p.status = 'suspended', FALSE),
+		SELECT COALESCE(p.deleted_at IS NOT NULL OR p.status = 'deleted' OR (p.status = 'suspended' AND p.suspended_reason = 'admin_action'), FALSE),
+			COALESCE(p.status = 'suspended' AND p.suspended_reason IS DISTINCT FROM 'admin_action', FALSE),
 			EXISTS (SELECT 1 FROM user_workspaces uw WHERE uw.workspace_id = w.id AND uw.user_id = $2::uuid),
 			EXISTS (SELECT 1 FROM veridian_frozen_members f WHERE f.workspace_id = w.id AND f.user_id = $2::text),
 			EXISTS (SELECT 1 FROM users u WHERE u.id = $2::uuid AND u.hub_deleted_at >= $3)

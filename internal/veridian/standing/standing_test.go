@@ -92,6 +92,12 @@ func TestStore_Of(t *testing.T) {
 
 	exec(t, db, `UPDATE veridian_plan SET status = 'suspended', suspended_at = NOW()`)
 	want("suspendu", "ws", uid, State{Workspace: true, Member: true, Suspended: true})
+	exec(t, db, `UPDATE veridian_plan SET suspended_reason = 'billing_past_due'`)
+	want("suspendu pour facturation : lecture seule", "ws", uid, State{Workspace: true, Member: true, Suspended: true})
+	// Organisation suspendue au Hub (VER-245, 26/11) : boîtes, flux et accès se ferment comme pour un espace supprimé.
+	exec(t, db, `UPDATE veridian_plan SET suspended_reason = 'admin_action'`)
+	want("organisation suspendue : fermé", "ws", uid, State{Workspace: true, Member: true, Closed: true})
+	exec(t, db, `UPDATE veridian_plan SET suspended_reason = NULL`)
 	exec(t, db, `UPDATE veridian_plan SET status = 'active', deleted_at = NOW()`)
 	want("fermé", "ws", uid, State{Workspace: true, Member: true, Closed: true})
 	exec(t, db, `UPDATE veridian_plan SET deleted_at = NULL`)

@@ -41,3 +41,13 @@ Tout ce qui dure plus qu'une requête relit la situation **à chaque passage** (
 `standing_test.go`, `accountgate_test.go`, `guard_test.go`, `standing_test.go` (mailapi), `server_test.go` (imapgate), `TestRemoveMember_*`,
 `TestFreezeMember_Cuts*` ; chaque garde sabotée et vue rouge. `python3 scripts/e2e/retrait-boite.py` (staging, vrais IMAP, SMTP, IDLE et flux,
 60 s, témoins) : 0 prouvé, 1 défaut, 2 non abouti. En prod : cas 37 du Hub.
+
+## Suspension d'organisation : tout se ferme (26/11/2026, VER-245)
+Défaut mesuré en prod par la recette du Hub : organisation suspendue, acquittée « suspendu », et la session du propriétaire lisait encore
+`contacts.list` et `mail.mailboxes.list` 64 s après. Notifuse traitait toute suspension comme une suspension de FACTURATION (§5.4 : envois bloqués).
+- `reason = admin_action` (`domain.VeridianSuspendReasonOrganisation`, prédicat unique `VeridianOrganisationSuspended()`) : l'espace se ferme.
+  HTTP : 423 `workspace_suspended` en lecture comme en écriture (filtre global `VeridianSpaceGateWithCache`, même code que le CRM) ; `standing.Closed`
+  vrai, donc accès de boîte (IMAP, SMTP), flux `mail.events` et tout ce qui relit `standing` se ferment aussi.
+- `billing_past_due`, `quota_exceeded` : inchangé, envois bloqués (paywall), lecture servie.
+- Le Hub garde la main pendant la suspension : un appel à signature Hub VÉRIFIÉE est exempté (jamais la seule présence de l'en-tête).
+- Corrigé au passage : `/api/veridian/` entier était exempté du filtre d'espace (routes de l'utilisateur comprises) ; seul `/api/veridian/admin/` l'est.

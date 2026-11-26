@@ -1079,7 +1079,7 @@ func (a *App) veridianWrapHandler(handler http.Handler) http.Handler {
 	// tenant_soft_deleted prime sur les autres décisions de gating (suspended,
 	// HubSyncDead, feature gate). Cache partagé avec le paywall pour
 	// économiser les round-trips DB sur les routes communes.
-	handler = middleware.VeridianSoftDeletedFilterWithCache(a.veridianPaywallCache, a.veridianPlanRepo, a.logger)(handler)
+	handler = middleware.VeridianSpaceGateWithCache(a.veridianPaywallCache, a.veridianPlanRepo, a.config.HubAPISecret, a.logger)(handler)
 
 	// === Freeze member per-user (CONTRAT-HUB §5.21, 2026-05-25) ===
 	// Wrappe le handler GLOBAL : si user frozen sur le workspace courant,

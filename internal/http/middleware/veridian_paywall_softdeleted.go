@@ -62,8 +62,12 @@ import (
 //
 // /api/health et /api/version sont exemptés pour rester observables
 // même si tous les tenants sont deleted (smoke tests CI).
+//
+// 26/11/2026 (chasse sécu) : « /api/veridian/ » entier était exempté, routes de l'UTILISATEUR comprises (mail.*,
+// contacts.intake, reservoir.*…) : un espace supprimé ou suspendu y lisait et y écrivait encore. Seul l'admin Hub
+// (/api/veridian/admin/) reste exempté par son chemin ; tout autre appel du Hub l'est par sa signature VÉRIFIÉE.
 var veridianSoftDeletedExemptPrefixes = []string{
-	"/api/veridian/",
+	"/api/veridian/admin/",
 	"/api/tenants/",
 	"/api/health",
 	"/api/version",
@@ -182,6 +186,16 @@ func NewVeridianSoftDeletedMiddleware(planRepo domain.VeridianPlanRepository, lo
 // À utiliser dans app.Start() avec le même *PaywallCache que le paywall +
 // le handler admin invalidate.
 func NewVeridianSoftDeletedMiddlewareWithCache(cache *PaywallCache, planRepo domain.VeridianPlanRepository, log logger.Logger) func(http.Handler) http.Handler {
+	return newVeridianSpaceGate(cache, planRepo, "", log)
+}
+
+// VeridianSpaceGateWithCache : le filtre global (espace supprimé : lecture masquée, écriture 402 ; organisation
+// suspendue : 423 partout), qui exempte les appels du Hub par leur signature vérifiée (hubSecret).
+func VeridianSpaceGateWithCache(cache *PaywallCache, planRepo domain.VeridianPlanRepository, hubSecret string, log logger.Logger) func(http.Handler) http.Handler {
+	return newVeridianSpaceGate(cache, planRepo, hubSecret, log)
+}
+
+func newVeridianSpaceGate(cache *PaywallCache, planRepo domain.VeridianPlanRepository, hubSecret string, log logger.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if planRepo == nil {
@@ -190,7 +204,8 @@ func NewVeridianSoftDeletedMiddlewareWithCache(cache *PaywallCache, planRepo dom
 			}
 
 			// Exempts : admin Hub, HMAC tenants, health/version, auth.
-			if isSoftDeletedExemptPath(r.URL.Path) {
+			if isSoftDeletedExemptPath(r.URL.Path) ||
+				(hubSecret != "" && r.Header.Get("X-Veridian-Hub-Signature") != "" && veridianHubSignatureValid(r, hubSecret)) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -244,6 +259,12 @@ func NewVeridianSoftDeletedMiddlewareWithCache(cache *PaywallCache, planRepo dom
 			// Tenant pas soft-deleted : passe (le paywall middleware
 			// downstream peut encore gérer suspended/HubSyncDead).
 			if entry.plan.DeletedAt == nil {
+				// Organisation suspendue au Hub (VER-245) : tout se ferme, lecture comprise, comme au CRM. La suspension de
+				// facturation, elle, ne bloque que les envois (paywall, CONTRAT-HUB §5.4).
+				if entry.plan.VeridianOrganisationSuspended() {
+					writeWorkspaceSuspendedResponse(w, workspaceID)
+					return
+				}
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -313,4 +334,15 @@ func VeridianSoftDeletedFilter(planRepo domain.VeridianPlanRepository, log logge
 // (recommandé pour le wiring app.Start).
 func VeridianSoftDeletedFilterWithCache(cache *PaywallCache, planRepo domain.VeridianPlanRepository, log logger.Logger) func(http.Handler) http.Handler {
 	return NewVeridianSoftDeletedMiddlewareWithCache(cache, planRepo, log)
+}
+
+// writeWorkspaceSuspendedResponse : 423 workspace_suspended, le même code que le CRM (CONTRAT-HUB, suspension d'organisation).
+func writeWorkspaceSuspendedResponse(w http.ResponseWriter, workspaceID string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusLocked)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"error":        "workspace_suspended",
+		"message":      "Cet espace est suspendu par son organisation : rien ne s'y lit ni ne s'y écrit jusqu'à la reprise.",
+		"workspace_id": workspaceID,
+	})
 }
