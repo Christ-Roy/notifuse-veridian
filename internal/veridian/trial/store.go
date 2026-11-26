@@ -27,6 +27,11 @@ func (s *Store) SetHubTenant(ctx context.Context, workspaceID, hubTenantID strin
 	return err
 }
 
+// HubTenantOf rend le tenant du Hub relié à l'espace (tenantlink), "" sans lien ni plan.
+func (s *Store) HubTenantOf(ctx context.Context, workspaceID string) (string, error) {
+	return (&tenantlink.Store{DB: s.DB}).HubTenantOf(ctx, workspaceID)
+}
+
 // SetTrial écrit le statut d'essai d'un workspace. sql.ErrNoRows si le workspace n'a pas de plan.
 func (s *Store) SetTrial(ctx context.Context, workspaceID, status string, endsAt *time.Time) error {
 	res, err := s.DB.ExecContext(ctx, `

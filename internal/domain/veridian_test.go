@@ -1260,6 +1260,16 @@ func TestConsoleChooseSpacePath_SuiviEtSansEspace(t *testing.T) {
 	}
 }
 
+// La réponse du ménage d'essai nomme les espaces gardés parce que reliés au Hub, et se tait quand il n'y en a pas.
+func TestWipeTestTenantsResponse_HubLinkedJSON(t *testing.T) {
+	b, err := json.Marshal(WipeTestTenantsResponse{Wiped: []string{"e2eresidu"}, Skipped: []string{"e2ecrm"}, HubLinked: []string{"e2ecrm"}})
+	require.NoError(t, err)
+	assert.Contains(t, string(b), `"hub_linked":["e2ecrm"]`)
+	b, err = json.Marshal(WipeTestTenantsResponse{Wiped: []string{}})
+	require.NoError(t, err)
+	assert.NotContains(t, string(b), "hub_linked")
+}
+
 // Le message d'un 409 hub_tenant_conflict dit lequel des deux liens tient : l'espace ou le tenant.
 func TestHubTenantConflict_Error(t *testing.T) {
 	assert.Contains(t, (&HubTenantConflict{WorkspaceID: "beta", HubTenantID: "t", LinkedWorkspace: "alpha"}).Error(), "autre espace")

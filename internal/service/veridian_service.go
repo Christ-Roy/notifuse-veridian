@@ -1234,8 +1234,12 @@ func (s *veridianService) WipeTestTenants(ctx context.Context, input domain.Wipe
 		return nil, errors.New("prefix or tenant_ids required")
 	}
 
-	// Resoudre la liste de candidats
-	candidates := input.TenantIDs
+	// Resoudre la liste de candidats. named : nommes explicitement (tenant_ids), les seuls qui partent meme relies au Hub.
+	candidates := append([]string(nil), input.TenantIDs...)
+	named := make(map[string]bool, len(input.TenantIDs))
+	for _, id := range input.TenantIDs {
+		named[id] = true
+	}
 	if input.Prefix != "" {
 		// Bloquer prefix '%' ou '_' raw qui matcherait tout
 		if strings.ContainsAny(input.Prefix, "%_") {
@@ -1309,6 +1313,19 @@ func (s *veridianService) WipeTestTenants(ctx context.Context, input domain.Wipe
 			resp.Skipped = append(resp.Skipped, tid)
 			continue
 		}
+		// Un espace relié à un tenant du Hub appartient à un parcours du Hub : un préfixe d'essai ne l'emporte pas, il faut le nommer.
+		if !named[tid] && s.hubTenantStore != nil {
+			linked, linkErr := s.hubTenantStore.HubTenantOf(ctx, tid)
+			if linkErr != nil {
+				resp.Errors[tid] = "lecture du lien Hub : " + linkErr.Error()
+				continue
+			}
+			if linked != "" {
+				resp.Skipped = append(resp.Skipped, tid)
+				resp.HubLinked = append(resp.HubLinked, tid)
+				continue
+			}
+		}
 
 		if err := s.wipeOneTenant(ctx, rootCtx, tid); err != nil {
 			resp.Errors[tid] = err.Error()
@@ -1319,9 +1336,12 @@ func (s *veridianService) WipeTestTenants(ctx context.Context, input domain.Wipe
 
 	if s.logger != nil {
 		s.logger.WithFields(map[string]interface{}{
-			"wiped":   len(resp.Wiped),
-			"skipped": len(resp.Skipped),
-			"errors":  len(resp.Errors),
+			"wiped":      len(resp.Wiped),
+			"skipped":    len(resp.Skipped),
+			"errors":     len(resp.Errors),
+			"hub_linked": resp.HubLinked,
+			"wiped_ids":  resp.Wiped,
+			"prefix":     input.Prefix,
 		}).Info("veridian: WipeTestTenants completed")
 	}
 	return resp, nil

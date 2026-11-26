@@ -87,6 +87,16 @@ func (s *Store) Link(ctx context.Context, workspaceID, hubTenantID string, repla
 	return true, tx.Commit()
 }
 
+// HubTenantOf rend le tenant du Hub relié à l'espace, "" sans lien ni plan.
+func (s *Store) HubTenantOf(ctx context.Context, workspaceID string) (string, error) {
+	var v sql.NullString
+	err := s.DB.QueryRowContext(ctx, `SELECT hub_tenant_id FROM veridian_plan WHERE workspace_id = $1`, workspaceID).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return v.String, err
+}
+
 // Handler sert POST /api/hub/tenants/link.
 type Handler struct {
 	Store interface {

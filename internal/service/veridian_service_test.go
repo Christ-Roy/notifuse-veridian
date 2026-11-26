@@ -3368,6 +3368,42 @@ func (f *fakeHubTenantStore) SetHubTenant(_ context.Context, ws, hub string) err
 	return nil
 }
 
+func (f *fakeHubTenantStore) HubTenantOf(_ context.Context, ws string) (string, error) {
+	return f.got[ws], nil
+}
+
+// 26/11 01:08Z : le ménage de la CI (préfixe « e2e ») a supprimé l'espace d'essai du CRM, relié au Hub, en plein essai. Un espace
+// relié n'est jamais emporté par un préfixe ; nommé dans tenant_ids, il part comme avant.
+func TestVeridianService_WipeTestTenants_PrefixeEpargneLesEspacesReliesAuHub(t *testing.T) {
+	svc, m := newVeridianService(t)
+	svc.ConfigureHubTenantStore(&fakeHubTenantStore{got: map[string]string{"e2ecrm": "3108142a"}})
+	ctx := context.Background()
+	rootUser := &domain.User{ID: "root-id", Email: "root@veridian.site", Type: domain.UserTypeUser}
+	m.userRepo.EXPECT().GetUserByEmail(gomock.Any(), "root@veridian.site").Return(rootUser, nil).AnyTimes()
+	m.userRepo.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.userRepo.EXPECT().DeleteSession(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	m.emitter.EXPECT().Emit(gomock.Any(), domain.EventTenantDeleted, gomock.Any(), gomock.Any()).AnyTimes()
+	wipes := func(ws string) {
+		m.workspaceRepo.EXPECT().GetWorkspaceUsersWithEmail(ctx, ws).Return([]*domain.UserWorkspaceWithEmail{}, nil).Times(1)
+		m.workspace.EXPECT().DeleteWorkspace(gomock.Any(), ws).Return(nil).Times(1)
+		m.planRepo.EXPECT().HardDelete(ctx, ws).Return(nil).Times(1)
+	}
+
+	m.planRepo.EXPECT().ListByPrefix(ctx, "e2e").Return([]string{"e2ecrm", "e2eresidu"}, nil)
+	wipes("e2eresidu")
+	resp, err := svc.WipeTestTenants(ctx, domain.WipeTestTenantsInput{Prefix: "e2e"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"e2eresidu"}, resp.Wiped)
+	assert.Equal(t, []string{"e2ecrm"}, resp.HubLinked)
+	assert.Contains(t, resp.Skipped, "e2ecrm")
+
+	wipes("e2ecrm")
+	resp, err = svc.WipeTestTenants(ctx, domain.WipeTestTenantsInput{TenantIDs: []string{"e2ecrm"}})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"e2ecrm"}, resp.Wiped, "nommé, il part")
+	assert.Empty(t, resp.HubLinked)
+}
+
 // L'id de tenant du Hub (V73) est appris par update-plan, pour que le MCP relie son claim tenant_id au workspace.
 func TestUpdatePlan_ApprendLIdDeTenantDuHub(t *testing.T) {
 	svc, m := newVeridianService(t)

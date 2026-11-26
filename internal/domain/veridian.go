@@ -594,6 +594,8 @@ type TrialStore interface {
 // HubTenantStore relie l'id de tenant du Hub (V73) a un workspace.
 type HubTenantStore interface {
 	SetHubTenant(ctx context.Context, workspaceID, hubTenantID string) error
+	// HubTenantOf rend le tenant du Hub relié à l'espace, "" sans lien ni plan.
+	HubTenantOf(ctx context.Context, workspaceID string) (string, error)
 }
 
 // IsValidHubTenantID : 1 a 64 caracteres [A-Za-z0-9_-] (un UUID du Hub y tient).
@@ -1153,8 +1155,12 @@ type WipeTestTenantsInput struct {
 // WipeTestTenantsResponse renvoie la liste des tenants supprimes + erreurs.
 type WipeTestTenantsResponse struct {
 	Wiped   []string          `json:"wiped"`             // tenant_ids supprimes avec succes
-	Skipped []string          `json:"skipped,omitempty"` // tenant_ids matchant safety prefixes
+	Skipped []string          `json:"skipped,omitempty"` // tenant_ids matchant safety prefixes, ou reliés au Hub (ci-dessous)
 	Errors  map[string]string `json:"errors,omitempty"`  // tenant_id → message d'erreur
+	// HubLinked : trouvés par le préfixe mais reliés à un tenant du Hub, donc gardés. Un préfixe d'essai (« e2e ») est commun à
+	// toutes les sessions : le 26/11 à 01:08Z, le ménage de la CI a supprimé l'espace d'essai du CRM en plein essai. Un espace
+	// relié ne part que nommé dans tenant_ids.
+	HubLinked []string `json:"hub_linked,omitempty"`
 }
 
 // ListTenantsInput est le query de GET /api/veridian/admin/tenants. Dry-run

@@ -62,6 +62,23 @@ func TestGetTrials_ListeVide_AucuneRequete(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+// HubTenantOf délègue à tenantlink : le tenant relié, "" sans plan.
+func TestHubTenantOf_DelegueAuLienUnique(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+	mock.ExpectQuery(`SELECT hub_tenant_id FROM veridian_plan WHERE workspace_id = \$1`).WithArgs("ws1").
+		WillReturnRows(sqlmock.NewRows([]string{"hub_tenant_id"}).AddRow("t-1"))
+	got, err := (&Store{DB: db}).HubTenantOf(context.Background(), "ws1")
+	require.NoError(t, err)
+	assert.Equal(t, "t-1", got)
+	mock.ExpectQuery(`SELECT hub_tenant_id FROM veridian_plan`).WillReturnRows(sqlmock.NewRows([]string{"hub_tenant_id"}))
+	got, err = (&Store{DB: db}).HubTenantOf(context.Background(), "absent")
+	require.NoError(t, err)
+	assert.Equal(t, "", got)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 // SetHubTenant passe par l'écriture unique du lien (tenantlink) : contrôles avant l'UPDATE, ErrNoRows sans plan, et jamais de
 // re-pointage (le cas réel est éprouvé sur PostgreSQL dans tenantlink).
 func TestSetHubTenant_EcritParLeLienUniqueEtErrNoRowsSansPlan(t *testing.T) {

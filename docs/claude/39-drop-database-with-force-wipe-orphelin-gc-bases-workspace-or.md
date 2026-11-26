@@ -47,3 +47,5 @@ réussit.
 | `internal/http/veridian_handler.go` | +champ `orphanDBGC` + routes `POST`/`GET /api/veridian/admin/gc-orphan-workspace-dbs` |
 | `internal/app/app.go` | +`ConfigureWorkspaceDBCleanup(config.Database.Prefix)` (type-assert) + `SetOrphanDBGC(service, config.Environment)` après le câblage cold-simulate |
 
+
+> 26/11/2026 : un ménage par préfixe ne supprime jamais un espace relié à un tenant du Hub (`hub_linked`), il faut le nommer dans `tenant_ids`. Pourquoi : fiche 88.

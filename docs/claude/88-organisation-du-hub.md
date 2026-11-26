@@ -46,3 +46,12 @@ pas Notifuse, et `update-plan` exige un `plan` qu'il réécrit (quota, événeme
   un conflit n'y est pas écrit mais ne bloque pas le plan, il revient dans `hub_tenant_conflict` de la réponse et en log `error`.
 - Le Hub appelle la route à chaque création, rejeu et `hub link`, et attend le 200 avant de délivrer un jeton d'action.
 - CLI : `notifuse-admin hub:tenant-link`. Mesure prod du 26/11 : 23 espaces vivants, 16 reliés, 0 doublon.
+
+### Le ménage d'essai épargne les espaces reliés (26/11/2026)
+
+À 01:08:29Z, l'étape « Cleanup test tenants » de notre CI (38 préfixes, dont `e2e`) a supprimé `e2ecrmmwwtkl6c`,
+`e2edelmwwtid0c` et `e2essosadm4236`, espaces d'essai du Hub et du CRM, en plein essai. Ce qui ressemblait à un import
+qui « résout l'espace autrement » (409 à 01:08:43Z) était cet espace supprimé : toutes les actions passent par la même
+résolution (`actions.SQLStore.Resolve`). Depuis, `wipe-test-tenants` par préfixe saute tout espace relié à un tenant du
+Hub (`hub_linked` dans la réponse) ; nommé dans `tenant_ids`, il part comme avant. Le journal du ménage nomme désormais
+le préfixe et les espaces supprimés (`wiped_ids`).

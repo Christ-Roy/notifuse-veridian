@@ -120,6 +120,20 @@ func TestLink_UnTenantUnSeulEspaceVivant(t *testing.T) {
 	assert.ErrorIs(t, err, sql.ErrNoRows)
 }
 
+// HubTenantOf : ce que le ménage d'essai lit pour épargner un espace relié. Sans lien ni plan : "", jamais une erreur.
+func TestHubTenantOf(t *testing.T) {
+	db := systemDB(t)
+	s := &Store{DB: db}
+	ctx := context.Background()
+	_, err := s.Link(ctx, "alpha", "t-alpha", false)
+	require.NoError(t, err)
+	for ws, want := range map[string]string{"alpha": "t-alpha", "beta": "", "inconnu": ""} {
+		got, err := s.HubTenantOf(ctx, ws)
+		require.NoError(t, err, ws)
+		assert.Equal(t, want, got, ws)
+	}
+}
+
 // Deux liens concurrents du même tenant vers deux espaces : un seul gagne (verrou sur le tenant).
 func TestLink_ConcurrentsUnSeulGagne(t *testing.T) {
 	db := systemDB(t)
