@@ -25,11 +25,14 @@ import (
 // Prefix distingue un accès de boîte d'une clé d'API dans l'identité rendue au bridge SMTP.
 const Prefix = "box:"
 
-// LimitLogin borne les vérifications de mot de passe. Le secret a 160 bits : la borne protège la base, pas le secret, et elle
-// est globale pour qu'un tiers ne puisse pas verrouiller la boîte d'un client en se trompant exprès.
+// LimitLogin borne globalement les ÉCHECS de vérification de mot de passe, et seulement eux. Le secret a 160 bits : la borne ne protège
+// pas le secret mais la base. Elle ne refuse donc jamais un mot de passe juste (compter les succès laissait quelques centaines de /64
+// IPv6 épuiser le budget de tous les clients légitimes, D2 du 26/11) : au-delà du seuil, un échec est seulement ralenti (overBudgetDelay),
+// la vérification a lieu quand même. Les budgets par adresse (gate.go) font le tri par adresse.
 const (
 	LimitLogin          = "box_smtp_login"
-	LimitLoginPerMinute = 600
+	LimitLoginPerMinute = 6000
+	overBudgetDelay     = 2 * time.Second
 )
 
 // Accesses : accès de boîte.
@@ -61,6 +64,7 @@ type Deps struct {
 type Sender struct {
 	d      Deps
 	dedupe *smtprelay.Dedupe
+	sleep  func(time.Duration) // ralentit les échecs au-delà de la borne globale (injectable en test)
 }
 
 // New construit la porte.
@@ -68,7 +72,7 @@ func New(d Deps) *Sender {
 	if d.Now == nil {
 		d.Now = time.Now
 	}
-	return &Sender{d: d, dedupe: smtprelay.NewDedupe(24 * time.Hour)}
+	return &Sender{d: d, dedupe: smtprelay.NewDedupe(24 * time.Hour), sleep: time.Sleep}
 }
 
 type recorderBox struct{ r Recorder }
@@ -93,11 +97,12 @@ func LooksLikeAPIKey(secret string) bool { return strings.Count(secret, ".") == 
 
 // Login vérifie un accès de boîte et rend son identité pour le bridge.
 func (s *Sender) Login(ctx context.Context, username, password string) (string, error) {
-	if !s.d.Limiter.Allow(LimitLogin, "global") {
-		return "", smtp_bridge.ErrTemporaryAuth
-	}
 	a, err := s.d.Accesses.Verify(ctx, username, password)
 	if errors.Is(err, boxaccess.ErrAuth) {
+		if !s.d.Limiter.Allow(LimitLogin, "global") {
+			s.d.Logger.Warn("Box SMTP: global failed-login budget exceeded, slowing down")
+			s.sleep(overBudgetDelay)
+		}
 		boxaccess.Journal.Add("smtp", username, false, "bad_credentials")
 		return "", err
 	}

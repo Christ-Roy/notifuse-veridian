@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/veridian/boxaccess"
 	"github.com/Notifuse/notifuse/internal/veridian/mailbox"
 	"github.com/Notifuse/notifuse/pkg/logger"
+	"github.com/Notifuse/notifuse/pkg/ratelimiter"
 	"github.com/Notifuse/notifuse/pkg/smtp_bridge"
 	"github.com/emersion/go-smtp"
 )
@@ -204,8 +206,8 @@ func TestLogin(t *testing.T) {
 		t.Fatalf("une panne n'est pas un mauvais mot de passe : %v", err)
 	}
 	f.verify, f.noBudget = nil, true
-	if _, err := s.Login(context.Background(), "jc@boite.fr", "x"); !errors.Is(err, smtp_bridge.ErrTemporaryAuth) {
-		t.Fatal(err)
+	if _, err := s.Login(context.Background(), "jc@boite.fr", "x"); err != nil {
+		t.Fatalf("un bon mot de passe n'est jamais refusé par la borne globale : %v", err)
 	}
 	if !LooksLikeAPIKey("aa.bb.cc") || LooksLikeAPIKey("abcdef234567") {
 		t.Fatal("clé d'API ou mot de passe de boîte")
@@ -243,5 +245,39 @@ func TestSubmit_SuspendedWorkspaceDoesNotSend(t *testing.T) {
 	}
 	if len(f.sent) != 0 || f.reserved != 0 {
 		t.Fatal("rien ne part d'un espace suspendu")
+	}
+}
+
+// La borne globale ne compte que les échecs : des milliers de logins valides venus d'autres adresses ne ferment pas la porte,
+// et un déluge d'échecs ne fait pas refuser un bon mot de passe (la borne protège la base, pas le secret).
+func TestLogin_GlobalLimitNotExhaustedByForeignBuckets(t *testing.T) {
+	f, s := bench()
+	rl := ratelimiter.NewRateLimiter()
+	rl.SetPolicy(LimitLogin, LimitLoginPerMinute, time.Minute)
+	t.Cleanup(rl.Stop)
+	s.d.Limiter = rl
+	slept := 0
+	s.sleep = func(time.Duration) { slept++ }
+	ctx := context.Background()
+	for i := 0; i < LimitLoginPerMinute+50; i++ {
+		if _, err := s.Login(ctx, "jc@boite.fr", "x"); err != nil {
+			t.Fatalf("login valide %d refusé : %v", i, err)
+		}
+	}
+	if slept != 0 {
+		t.Fatal("des succès ne doivent rien ralentir")
+	}
+	f.verify = boxaccess.ErrAuth
+	for i := 0; i < LimitLoginPerMinute+50; i++ {
+		if _, err := s.Login(ctx, "jc@boite.fr", "faux"); !errors.Is(err, boxaccess.ErrAuth) {
+			t.Fatalf("mauvais mot de passe %d : %v", i, err)
+		}
+	}
+	if slept == 0 {
+		t.Fatal("au-delà du seuil global, les échecs doivent être ralentis")
+	}
+	f.verify = nil
+	if _, err := s.Login(ctx, "jc@boite.fr", "x"); err != nil {
+		t.Fatalf("bon mot de passe refusé après un déluge d'échecs : %v", err)
 	}
 }
