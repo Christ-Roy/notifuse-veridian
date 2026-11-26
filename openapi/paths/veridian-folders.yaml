@@ -65,6 +65,8 @@
           application/json:
             schema:
               $ref: '../components/schemas/veridian-folders.yaml#/VeridianFolderTree'
+      '401': { $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized' }
+      '403': { $ref: '../components/veridian-responses.yaml#/VeridianForbidden' }
 
 /api/veridian/folders.create:
   post:

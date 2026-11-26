@@ -3744,13 +3744,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/responses-Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/responses-Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       },
@@ -3791,7 +3791,7 @@
             }
           },
           "401": {
-            "$ref": "#/components/responses/responses-Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           }
         }
       }
@@ -3836,13 +3836,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       },
@@ -3887,7 +3887,7 @@
             }
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           }
         }
       }
@@ -3961,13 +3961,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       }
@@ -4028,13 +4028,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       }
@@ -4071,10 +4071,10 @@
             }
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       },
@@ -4114,6 +4114,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/VeridianUnauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       }
@@ -4176,13 +4182,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           },
           "404": {
             "description": "Unknown broadcast or automation"
@@ -4367,13 +4373,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           },
           "409": {
             "description": "The import would start a live automation; nothing was written"
@@ -4436,10 +4442,10 @@
             }
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       }
@@ -4495,10 +4501,10 @@
             }
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       }
@@ -4572,13 +4578,13 @@
             "description": "Enrolled contacts and state of the source"
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       }
@@ -4621,8 +4627,7 @@
           {
             "name": "limit",
             "in": "query",
-            "description": "Addresses at most per class (default 200",
-            "max 2000)": null,
+            "description": "Addresses at most per class (default 200, max 2000)",
             "schema": {
               "type": "integer"
             }
@@ -4661,13 +4666,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       },
@@ -4716,6 +4721,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/VeridianUnauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       }
@@ -4805,13 +4816,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       },
@@ -4860,6 +4871,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/VeridianUnauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       }
@@ -4896,10 +4913,10 @@
             }
           },
           "401": {
-            "$ref": "#/components/responses/Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       }
@@ -4951,10 +4968,10 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       }
@@ -5120,6 +5137,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/VeridianUnauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       }
@@ -5234,13 +5257,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/responses-Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/responses-Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       }
@@ -5402,13 +5425,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/responses-Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/responses-Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       }
@@ -5458,13 +5481,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/responses-Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/responses-Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           },
           "404": {
             "description": "Introuvable"
@@ -5513,13 +5536,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/responses-Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/responses-Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           },
           "404": {
             "description": "Introuvable"
@@ -5576,13 +5599,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/responses-Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/responses-Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           },
           "404": {
             "description": "Introuvable"
@@ -5650,13 +5673,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/responses-Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/responses-Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           },
           "404": {
             "description": "Introuvable"
@@ -5726,13 +5749,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/responses-Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/responses-Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           },
           "404": {
             "description": "Introuvable"
@@ -5796,13 +5819,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/responses-Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/responses-Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       }
@@ -5864,13 +5887,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/responses-Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/responses-Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           },
           "429": {
             "description": "8 flux ouverts au plus par workspace"
@@ -5910,13 +5933,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/responses-Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/responses-Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           },
           "409": {
             "description": "Refusé par une porte (profil en pause, contact désinscrit ou en rebond définitif)"
@@ -5959,13 +5982,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/responses-Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/responses-Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           },
           "409": {
             "description": "Refusé par une porte (profil en pause, contact désinscrit ou en rebond définitif)"
@@ -6001,13 +6024,13 @@
             "description": "OK"
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/responses-Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/responses-Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       }
@@ -6067,13 +6090,13 @@
             "description": "Créé, mot de passe compris"
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/responses-Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/responses-Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           },
           "409": {
             "description": "Nombre maximal d'accès atteint"
@@ -6118,13 +6141,13 @@
             "description": "OK"
           },
           "400": {
-            "$ref": "#/components/responses/BadRequest"
+            "$ref": "#/components/responses/VeridianBadRequest"
           },
           "401": {
-            "$ref": "#/components/responses/responses-Unauthorized"
+            "$ref": "#/components/responses/VeridianUnauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/responses-Forbidden"
+            "$ref": "#/components/responses/VeridianForbidden"
           },
           "404": {
             "description": "Accès introuvable"
@@ -6246,8 +6269,7 @@
             "description": "Missing permission"
           },
           "409": {
-            "description": "Already declared in this workspace",
-            "or 20 domains reached": null
+            "description": "Already declared in this workspace, or 20 domains reached"
           }
         }
       }
@@ -6499,6 +6521,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/VeridianUnauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/VeridianForbidden"
           }
         }
       }
@@ -8531,8 +8559,7 @@
           },
           "label": {
             "type": "string",
-            "description": "Texte du bouton",
-            "en français.": null
+            "description": "Texte du bouton, en français."
           },
           "impact": {
             "type": "string",
@@ -8596,14 +8623,14 @@
           },
           "explanation": {
             "type": "string",
-            "description": "Cause",
-            "en français.": null
+            "description": "Cause, en français."
           },
           "evidence": {
             "type": "object",
             "additionalProperties": true
           },
           "proposed_action": {
+            "type": "object",
             "nullable": true,
             "allOf": [
               {
@@ -8756,6 +8783,7 @@
             "description": "Le contrôle rejoué ne retrouve plus l'écart."
           },
           "remaining": {
+            "type": "object",
             "nullable": true,
             "allOf": [
               {
@@ -14325,8 +14353,7 @@
           },
           "applied": {
             "type": "boolean",
-            "description": "Always false",
-            "nothing is enrolled by this route.": null
+            "description": "Always false, nothing is enrolled by this route."
           },
           "classes": {
             "type": "array",
@@ -14563,8 +14590,8 @@
           }
         }
       },
-      "responses-Unauthorized": {
-        "description": "Unauthorized",
+      "VeridianUnauthorized": {
+        "description": "Unauthorized - invalid or missing authentication token",
         "content": {
           "application/json": {
             "schema": {
@@ -14576,15 +14603,25 @@
           }
         }
       },
-      "responses-Forbidden": {
-        "description": "Forbidden - insufficient permissions",
+      "VeridianBadRequest": {
+        "description": "Bad request - validation failed",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "VeridianForbidden": {
+        "description": "Forbidden - insufficient permissions for this workspace",
         "content": {
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/ErrorResponse"
             },
             "example": {
-              "error": "Insufficient permissions: read access to contacts required"
+              "error": "Insufficient permissions"
             }
           }
         }

@@ -44,11 +44,11 @@
                 details: { type: array, items: { type: object } }
                 triggers: { type: array, items: { type: object } }
       '400':
-        $ref: '#/components/responses/BadRequest'
+        $ref: '../components/veridian-responses.yaml#/VeridianBadRequest'
       '401':
-        $ref: '#/components/responses/Unauthorized'
+        $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized'
       '403':
-        $ref: '#/components/responses/Forbidden'
+        $ref: '../components/veridian-responses.yaml#/VeridianForbidden'
       '409':
         description: The import would start a live automation; nothing was written
 /api/veridian/reservoir.summary:
@@ -74,9 +74,9 @@
               properties:
                 reservoirs: { type: array, items: { type: object } }
       '401':
-        $ref: '#/components/responses/Unauthorized'
+        $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized'
       '403':
-        $ref: '#/components/responses/Forbidden'
+        $ref: '../components/veridian-responses.yaml#/VeridianForbidden'
 /api/veridian/reservoir.lists:
   get:
     summary: Lists a batch can be added to, and whether that starts a live automation (Veridian, fiche 85)
@@ -103,9 +103,9 @@
                       name: { type: string }
                       starts_sequence: { type: boolean }
       '401':
-        $ref: '#/components/responses/Unauthorized'
+        $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized'
       '403':
-        $ref: '#/components/responses/Forbidden'
+        $ref: '../components/veridian-responses.yaml#/VeridianForbidden'
 /api/veridian/reservoir.activate:
   post:
     summary: Enroll a batch of reservoir contacts into a live automation (Veridian, fiche 85)
@@ -137,8 +137,8 @@
       '200':
         description: Enrolled contacts and state of the source
       '400':
-        $ref: '#/components/responses/BadRequest'
+        $ref: '../components/veridian-responses.yaml#/VeridianBadRequest'
       '401':
-        $ref: '#/components/responses/Unauthorized'
+        $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized'
       '403':
-        $ref: '#/components/responses/Forbidden'
+        $ref: '../components/veridian-responses.yaml#/VeridianForbidden'

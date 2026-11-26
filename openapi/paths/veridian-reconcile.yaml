@@ -81,6 +81,8 @@
           application/json:
             schema:
               $ref: '../components/schemas/veridian-reconcile.yaml#/ReconcileReport'
+      '401': { $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized' }
+      '403': { $ref: '../components/veridian-responses.yaml#/VeridianForbidden' }
 /api/veridian/reconcile.resolve:
   post:
     summary: Apply, preview or dismiss the proposed repair of a discrepancy

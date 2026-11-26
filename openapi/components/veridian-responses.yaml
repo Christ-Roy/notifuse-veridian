@@ -1,0 +1,25 @@
+# Réponses d'erreur communes des routes Veridian (une seule source, référencée depuis paths/veridian-*.yaml).
+# Noms préfixés « Veridian » : le bundler nomme un composant par sa clé ; sans préfixe, il entrait en collision
+# avec les réponses locales de l'upstream (automations.yaml) et renommait en « Unauthorized-2 ».
+VeridianBadRequest:
+  description: Bad request - validation failed
+  content:
+    application/json:
+      schema:
+        $ref: './schemas/common.yaml#/ErrorResponse'
+VeridianUnauthorized:
+  description: Unauthorized - invalid or missing authentication token
+  content:
+    application/json:
+      schema:
+        $ref: './schemas/common.yaml#/ErrorResponse'
+      example:
+        error: Unauthorized
+VeridianForbidden:
+  description: Forbidden - insufficient permissions for this workspace
+  content:
+    application/json:
+      schema:
+        $ref: './schemas/common.yaml#/ErrorResponse'
+      example:
+        error: 'Insufficient permissions'

@@ -56,6 +56,16 @@ du dépôt. Le pre-push fait i18n, frozen-files et `gardes`. Nouveau contrôle D
   **Écart** : 51 commandes utilisateur sur 123 ne sont mentionnées nulle part dans
   `AGENT-API.md` (ex. `folders:*`, `policy:*`, `analytics:query`). À documenter, non traité ici.
 
+## OpenAPI : bundle sans --force (26/11/2026)
+
+`cli-coverage-check.sh` joue aussi `openapi_bundle_check.py` : `redocly bundle` (version figée `@redocly/cli@2.84.0`)
+SANS `--force`, puis `openapi.json` versionné doit être égal au bundle frais. Rouge sinon, avec la commande de
+régénération. Le 26/11, 35 références `#/components/responses/...` pointaient dans des fichiers de chemins qui ne
+les définissaient pas : la doc servie n'avait plus ces réponses. Règle : une réponse d'erreur Veridian se réfère à
+`openapi/components/veridian-responses.yaml#/Veridian{BadRequest,Unauthorized,Forbidden}`, jamais à `#/components/...`
+depuis un fichier de chemins. Autotest (`--selftest`) : casse une référence et vieillit `openapi.json` sur une copie,
+exige les deux rouges. Le lint redocly est à zéro erreur ; les 5 avertissements restants sont upstream.
+
 ## Dettes
 
 - Le pre-push lit `core.hooksPath` = `notifuse-veridian/.husky` (dépôt principal, 201 commits

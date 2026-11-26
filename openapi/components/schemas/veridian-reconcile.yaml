@@ -2,7 +2,7 @@ ReconcileAction:
   type: object
   properties:
     kind: { type: string, enum: [reclassify_contacts, exit_contacts, cancel_queue_entries, recount_automation_stats] }
-    label: { type: string, description: Texte du bouton, en français. }
+    label: { type: string, description: 'Texte du bouton, en français.' }
     impact: { type: string, description: Ce que la réparation change. }
     reversible: { type: boolean }
     params: { type: object, additionalProperties: true }
@@ -23,9 +23,10 @@ ReconcileFinding:
     title: { type: string }
     expected: { type: string }
     observed: { type: string }
-    explanation: { type: string, description: Cause, en français. }
+    explanation: { type: string, description: 'Cause, en français.' }
     evidence: { type: object, additionalProperties: true }
     proposed_action:
+      type: object
       nullable: true
       allOf:
         - $ref: '#/ReconcileAction'
@@ -77,6 +78,7 @@ ReconcileResolveResult:
     result: { type: object, nullable: true, additionalProperties: true }
     verified: { type: boolean, description: Le contrôle rejoué ne retrouve plus l'écart. }
     remaining:
+      type: object
       nullable: true
       allOf:
         - $ref: '#/ReconcileFinding'

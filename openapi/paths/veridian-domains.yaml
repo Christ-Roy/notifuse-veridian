@@ -60,7 +60,7 @@
       '400': { description: Invalid domain name }
       '401': { description: Not a member of this workspace }
       '403': { description: Missing permission }
-      '409': { description: Already declared in this workspace, or 20 domains reached }
+      '409': { description: 'Already declared in this workspace, or 20 domains reached' }
 /api/veridian/sendingDomains.verify:
   post:
     summary: "Read the DNS of a sending domain now (DKIM, SPF, DMARC)"

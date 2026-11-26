@@ -35,11 +35,11 @@
             schema:
               $ref: '#/components/schemas/ProviderBreakdown'
       '400':
-        $ref: '#/components/responses/BadRequest'
+        $ref: '../components/veridian-responses.yaml#/VeridianBadRequest'
       '401':
-        $ref: '#/components/responses/Unauthorized'
+        $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized'
       '403':
-        $ref: '#/components/responses/Forbidden'
+        $ref: '../components/veridian-responses.yaml#/VeridianForbidden'
   get:
     summary: Count contacts by recipient provider class (GET form)
     operationId: veridianContactsProviderBreakdownGet
@@ -61,7 +61,7 @@
             schema:
               $ref: '#/components/schemas/ProviderBreakdown'
       '401':
-        $ref: '#/components/responses/Unauthorized'
+        $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized'
 
 components:
   schemas:
@@ -86,26 +86,3 @@ components:
         total:
           type: integer
           example: 500
-  responses:
-    BadRequest:
-      description: Bad request - validation failed
-      content:
-        application/json:
-          schema:
-            $ref: '../components/schemas/common.yaml#/ErrorResponse'
-    Unauthorized:
-      description: Unauthorized
-      content:
-        application/json:
-          schema:
-            $ref: '../components/schemas/common.yaml#/ErrorResponse'
-          example:
-            error: Unauthorized
-    Forbidden:
-      description: Forbidden - insufficient permissions
-      content:
-        application/json:
-          schema:
-            $ref: '../components/schemas/common.yaml#/ErrorResponse'
-          example:
-            error: 'Insufficient permissions: read access to contacts required'

@@ -30,11 +30,11 @@
             schema:
               $ref: '#/components/schemas/VeridianPolicyView'
       '400':
-        $ref: '#/components/responses/BadRequest'
+        $ref: '../components/veridian-responses.yaml#/VeridianBadRequest'
       '401':
-        $ref: '#/components/responses/Unauthorized'
+        $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized'
       '403':
-        $ref: '#/components/responses/Forbidden'
+        $ref: '../components/veridian-responses.yaml#/VeridianForbidden'
   post:
     summary: Send policy by recipient provider class (POST form)
     operationId: veridianPolicyGetPost
@@ -58,7 +58,7 @@
             schema:
               $ref: '#/components/schemas/VeridianPolicyView'
       '401':
-        $ref: '#/components/responses/Unauthorized'
+        $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized'
 
 /api/veridian/policy.set:
   post:
@@ -96,11 +96,11 @@
             schema:
               $ref: '#/components/schemas/VeridianPolicySetResult'
       '400':
-        $ref: '#/components/responses/BadRequest'
+        $ref: '../components/veridian-responses.yaml#/VeridianBadRequest'
       '401':
-        $ref: '#/components/responses/Unauthorized'
+        $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized'
       '403':
-        $ref: '#/components/responses/Forbidden'
+        $ref: '../components/veridian-responses.yaml#/VeridianForbidden'
 
 /api/veridian/policy.reset:
   post:
@@ -132,11 +132,11 @@
             schema:
               $ref: '#/components/schemas/VeridianPolicySetResult'
       '400':
-        $ref: '#/components/responses/BadRequest'
+        $ref: '../components/veridian-responses.yaml#/VeridianBadRequest'
       '401':
-        $ref: '#/components/responses/Unauthorized'
+        $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized'
       '403':
-        $ref: '#/components/responses/Forbidden'
+        $ref: '../components/veridian-responses.yaml#/VeridianForbidden'
 
 /api/veridian/policy.priority.list:
   get:
@@ -163,9 +163,9 @@
             schema:
               $ref: '#/components/schemas/VeridianPriorityList'
       '401':
-        $ref: '#/components/responses/Unauthorized'
+        $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized'
       '403':
-        $ref: '#/components/responses/Forbidden'
+        $ref: '../components/veridian-responses.yaml#/VeridianForbidden'
   post:
     summary: Send priority list (POST form)
     operationId: veridianPolicyPriorityListPost
@@ -187,6 +187,8 @@
           application/json:
             schema:
               $ref: '#/components/schemas/VeridianPriorityList'
+      '401': { $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized' }
+      '403': { $ref: '../components/veridian-responses.yaml#/VeridianForbidden' }
 
 /api/veridian/policy.priority.set:
   post:
@@ -218,11 +220,11 @@
             schema:
               $ref: '#/components/schemas/VeridianPriorityChange'
       '400':
-        $ref: '#/components/responses/BadRequest'
+        $ref: '../components/veridian-responses.yaml#/VeridianBadRequest'
       '401':
-        $ref: '#/components/responses/Unauthorized'
+        $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized'
       '403':
-        $ref: '#/components/responses/Forbidden'
+        $ref: '../components/veridian-responses.yaml#/VeridianForbidden'
       '404':
         description: Unknown broadcast or automation
 
@@ -289,11 +291,11 @@
             schema:
               $ref: '#/components/schemas/VeridianStockOverview'
       '400':
-        $ref: '#/components/responses/BadRequest'
+        $ref: '../components/veridian-responses.yaml#/VeridianBadRequest'
       '401':
-        $ref: '#/components/responses/Unauthorized'
+        $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized'
       '403':
-        $ref: '#/components/responses/Forbidden'
+        $ref: '../components/veridian-responses.yaml#/VeridianForbidden'
   post:
     summary: Stock by recipient provider class (POST form, same fields in the JSON body)
     operationId: veridianStockOverviewPost
@@ -318,6 +320,8 @@
           application/json:
             schema:
               $ref: '#/components/schemas/VeridianStockOverview'
+      '401': { $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized' }
+      '403': { $ref: '../components/veridian-responses.yaml#/VeridianForbidden' }
 
 /api/veridian/stock.config:
   get:
@@ -336,9 +340,9 @@
             schema:
               $ref: '#/components/schemas/VeridianStockConfigView'
       '401':
-        $ref: '#/components/responses/Unauthorized'
+        $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized'
       '403':
-        $ref: '#/components/responses/Forbidden'
+        $ref: '../components/veridian-responses.yaml#/VeridianForbidden'
 
 /api/veridian/stock.config.set:
   post:
@@ -366,9 +370,9 @@
             schema:
               $ref: '#/components/schemas/VeridianStockConfigView'
       '400':
-        $ref: '#/components/responses/BadRequest'
+        $ref: '../components/veridian-responses.yaml#/VeridianBadRequest'
       '403':
-        $ref: '#/components/responses/Forbidden'
+        $ref: '../components/veridian-responses.yaml#/VeridianForbidden'
 
 /api/veridian/policy.suggest-enrollment:
   get:
@@ -392,7 +396,7 @@
       - { name: workspace_id, in: query, required: true, schema: { type: string } }
       - { name: days, in: query, schema: { type: integer, minimum: 1, maximum: 60 } }
       - { name: include_emails, in: query, schema: { type: boolean } }
-      - { name: limit, in: query, description: Addresses at most per class (default 200, max 2000), schema: { type: integer } }
+      - { name: limit, in: query, description: 'Addresses at most per class (default 200, max 2000)', schema: { type: integer } }
       - { name: enrolled_list, in: query, schema: { type: string } }
       - { name: reserve_list, in: query, schema: { type: string } }
       - { name: enroll_automation, in: query, schema: { type: string } }
@@ -404,11 +408,11 @@
             schema:
               $ref: '#/components/schemas/VeridianSuggestion'
       '400':
-        $ref: '#/components/responses/BadRequest'
+        $ref: '../components/veridian-responses.yaml#/VeridianBadRequest'
       '401':
-        $ref: '#/components/responses/Unauthorized'
+        $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized'
       '403':
-        $ref: '#/components/responses/Forbidden'
+        $ref: '../components/veridian-responses.yaml#/VeridianForbidden'
   post:
     summary: Enrollment suggestion (POST form, same fields in the JSON body)
     operationId: veridianPolicySuggestEnrollmentPost
@@ -433,6 +437,8 @@
           application/json:
             schema:
               $ref: '#/components/schemas/VeridianSuggestion'
+      '401': { $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized' }
+      '403': { $ref: '../components/veridian-responses.yaml#/VeridianForbidden' }
 
 components:
   schemas:
@@ -591,7 +597,7 @@ components:
         generated_at: { type: string, format: date-time }
         days: { type: integer }
         enroll_automation_id: { type: string }
-        applied: { type: boolean, description: Always false, nothing is enrolled by this route. }
+        applied: { type: boolean, description: 'Always false, nothing is enrolled by this route.' }
         classes:
           type: array
           items: { $ref: '#/components/schemas/VeridianSuggestRow' }

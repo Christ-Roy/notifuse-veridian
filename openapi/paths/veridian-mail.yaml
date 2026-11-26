@@ -21,9 +21,9 @@
               type: object
               properties:
                 mailboxes: { type: array, items: { $ref: '../components/schemas/veridian-mail.yaml#/Mailbox' } }
-      '400': { $ref: '#/components/responses/BadRequest' }
-      '401': { $ref: '#/components/responses/Unauthorized' }
-      '403': { $ref: '#/components/responses/Forbidden' }
+      '400': { $ref: '../components/veridian-responses.yaml#/VeridianBadRequest' }
+      '401': { $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized' }
+      '403': { $ref: '../components/veridian-responses.yaml#/VeridianForbidden' }
 /api/veridian/mail.messages.list:
   get:
     summary: "Messages envoyés et reçus (filtres, recherche, pagination)"
@@ -105,9 +105,9 @@
               properties:
                 messages: { type: array, items: { $ref: '../components/schemas/veridian-mail.yaml#/MailSummary' } }
                 next_cursor: { type: string }
-      '400': { $ref: '#/components/responses/BadRequest' }
-      '401': { $ref: '#/components/responses/Unauthorized' }
-      '403': { $ref: '#/components/responses/Forbidden' }
+      '400': { $ref: '../components/veridian-responses.yaml#/VeridianBadRequest' }
+      '401': { $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized' }
+      '403': { $ref: '../components/veridian-responses.yaml#/VeridianForbidden' }
 /api/veridian/mail.messages.get:
   get:
     summary: "Un message en entier (en-têtes, texte, HTML assaini, pièces, DSN, lien)"
@@ -134,9 +134,9 @@
               type: object
               properties:
                 message: { $ref: '../components/schemas/veridian-mail.yaml#/MailMessage' }
-      '400': { $ref: '#/components/responses/BadRequest' }
-      '401': { $ref: '#/components/responses/Unauthorized' }
-      '403': { $ref: '#/components/responses/Forbidden' }
+      '400': { $ref: '../components/veridian-responses.yaml#/VeridianBadRequest' }
+      '401': { $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized' }
+      '403': { $ref: '../components/veridian-responses.yaml#/VeridianForbidden' }
       '404': { description: Introuvable }
 /api/veridian/mail.messages.raw:
   get:
@@ -161,9 +161,9 @@
         content:
           message/rfc822:
             schema: { type: string, format: binary }
-      '400': { $ref: '#/components/responses/BadRequest' }
-      '401': { $ref: '#/components/responses/Unauthorized' }
-      '403': { $ref: '#/components/responses/Forbidden' }
+      '400': { $ref: '../components/veridian-responses.yaml#/VeridianBadRequest' }
+      '401': { $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized' }
+      '403': { $ref: '../components/veridian-responses.yaml#/VeridianForbidden' }
       '404': { description: Introuvable }
 /api/veridian/mail.messages.attachment:
   get:
@@ -192,9 +192,9 @@
         content:
           application/octet-stream:
             schema: { type: string, format: binary }
-      '400': { $ref: '#/components/responses/BadRequest' }
-      '401': { $ref: '#/components/responses/Unauthorized' }
-      '403': { $ref: '#/components/responses/Forbidden' }
+      '400': { $ref: '../components/veridian-responses.yaml#/VeridianBadRequest' }
+      '401': { $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized' }
+      '403': { $ref: '../components/veridian-responses.yaml#/VeridianForbidden' }
       '404': { description: Introuvable }
 /api/veridian/mail.messages.update:
   post:
@@ -225,9 +225,9 @@
               type: object
               properties:
                 message: { $ref: '../components/schemas/veridian-mail.yaml#/MailMessage' }
-      '400': { $ref: '#/components/responses/BadRequest' }
-      '401': { $ref: '#/components/responses/Unauthorized' }
-      '403': { $ref: '#/components/responses/Forbidden' }
+      '400': { $ref: '../components/veridian-responses.yaml#/VeridianBadRequest' }
+      '401': { $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized' }
+      '403': { $ref: '../components/veridian-responses.yaml#/VeridianForbidden' }
       '404': { description: Introuvable }
 /api/veridian/mail.threads.get:
   get:
@@ -261,9 +261,9 @@
                 thread: { $ref: '../components/schemas/veridian-mail.yaml#/MailThread' }
                 threads: { type: array, items: { $ref: '../components/schemas/veridian-mail.yaml#/MailThread' } }
                 contact_email: { type: string }
-      '400': { $ref: '#/components/responses/BadRequest' }
-      '401': { $ref: '#/components/responses/Unauthorized' }
-      '403': { $ref: '#/components/responses/Forbidden' }
+      '400': { $ref: '../components/veridian-responses.yaml#/VeridianBadRequest' }
+      '401': { $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized' }
+      '403': { $ref: '../components/veridian-responses.yaml#/VeridianForbidden' }
       '404': { description: Introuvable }
 /api/veridian/mail.threads.list:
   get:
@@ -295,9 +295,9 @@
               type: object
               properties:
                 threads: { type: array, items: { $ref: '../components/schemas/veridian-mail.yaml#/MailThread' } }
-      '400': { $ref: '#/components/responses/BadRequest' }
-      '401': { $ref: '#/components/responses/Unauthorized' }
-      '403': { $ref: '#/components/responses/Forbidden' }
+      '400': { $ref: '../components/veridian-responses.yaml#/VeridianBadRequest' }
+      '401': { $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized' }
+      '403': { $ref: '../components/veridian-responses.yaml#/VeridianForbidden' }
 /api/veridian/mail.events:
   get:
     summary: "Flux serveur (SSE) des nouveaux messages, reprise par Last-Event-ID"
@@ -333,9 +333,9 @@
               id: 42
               event: message.received
               data: {"id":"...","kind":"reply_human","contact_email":"marie@exemple.fr","subject":"Re: ..."}
-      '400': { $ref: '#/components/responses/BadRequest' }
-      '401': { $ref: '#/components/responses/Unauthorized' }
-      '403': { $ref: '#/components/responses/Forbidden' }
+      '400': { $ref: '../components/veridian-responses.yaml#/VeridianBadRequest' }
+      '401': { $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized' }
+      '403': { $ref: '../components/veridian-responses.yaml#/VeridianForbidden' }
       '429': { description: "8 flux ouverts au plus par workspace" }
 /api/veridian/mail.messages.send:
   post:
@@ -358,9 +358,9 @@
           application/json:
             schema:
               $ref: '../components/schemas/veridian-mail.yaml#/MailSendResult'
-      '400': { $ref: '#/components/responses/BadRequest' }
-      '401': { $ref: '#/components/responses/Unauthorized' }
-      '403': { $ref: '#/components/responses/Forbidden' }
+      '400': { $ref: '../components/veridian-responses.yaml#/VeridianBadRequest' }
+      '401': { $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized' }
+      '403': { $ref: '../components/veridian-responses.yaml#/VeridianForbidden' }
       '409': { description: "Refusé par une porte (profil en pause, contact désinscrit ou en rebond définitif)" }
       '501': { description: Envoi non disponible }
 /api/veridian/mail.messages.reply:
@@ -384,9 +384,9 @@
           application/json:
             schema:
               $ref: '../components/schemas/veridian-mail.yaml#/MailSendResult'
-      '400': { $ref: '#/components/responses/BadRequest' }
-      '401': { $ref: '#/components/responses/Unauthorized' }
-      '403': { $ref: '#/components/responses/Forbidden' }
+      '400': { $ref: '../components/veridian-responses.yaml#/VeridianBadRequest' }
+      '401': { $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized' }
+      '403': { $ref: '../components/veridian-responses.yaml#/VeridianForbidden' }
       '409': { description: "Refusé par une porte (profil en pause, contact désinscrit ou en rebond définitif)" }
       '501': { description: Envoi non disponible }
 /api/veridian/mail.access.list:
@@ -404,9 +404,9 @@
         schema: { type: string }
     responses:
       '200': { description: OK }
-      '400': { $ref: '#/components/responses/BadRequest' }
-      '401': { $ref: '#/components/responses/Unauthorized' }
-      '403': { $ref: '#/components/responses/Forbidden' }
+      '400': { $ref: '../components/veridian-responses.yaml#/VeridianBadRequest' }
+      '401': { $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized' }
+      '403': { $ref: '../components/veridian-responses.yaml#/VeridianForbidden' }
 /api/veridian/mail.access.create:
   post:
     summary: "Crée un accès de boîte ; le mot de passe n'est rendu qu'une fois"
@@ -431,9 +431,9 @@
               daily_cap: { type: integer, minimum: 1, maximum: 1000, default: 200 }
     responses:
       '201': { description: "Créé, mot de passe compris" }
-      '400': { $ref: '#/components/responses/BadRequest' }
-      '401': { $ref: '#/components/responses/Unauthorized' }
-      '403': { $ref: '#/components/responses/Forbidden' }
+      '400': { $ref: '../components/veridian-responses.yaml#/VeridianBadRequest' }
+      '401': { $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized' }
+      '403': { $ref: '../components/veridian-responses.yaml#/VeridianForbidden' }
       '409': { description: "Nombre maximal d'accès atteint" }
 /api/veridian/mail.access.revoke:
   post:
@@ -455,31 +455,7 @@
               id: { type: string }
     responses:
       '200': { description: OK }
-      '400': { $ref: '#/components/responses/BadRequest' }
-      '401': { $ref: '#/components/responses/Unauthorized' }
-      '403': { $ref: '#/components/responses/Forbidden' }
+      '400': { $ref: '../components/veridian-responses.yaml#/VeridianBadRequest' }
+      '401': { $ref: '../components/veridian-responses.yaml#/VeridianUnauthorized' }
+      '403': { $ref: '../components/veridian-responses.yaml#/VeridianForbidden' }
       '404': { description: Accès introuvable }
-components:
-  responses:
-    BadRequest:
-      description: Bad request - validation failed
-      content:
-        application/json:
-          schema:
-            $ref: '../components/schemas/common.yaml#/ErrorResponse'
-    Unauthorized:
-      description: Unauthorized
-      content:
-        application/json:
-          schema:
-            $ref: '../components/schemas/common.yaml#/ErrorResponse'
-          example:
-            error: Unauthorized
-    Forbidden:
-      description: Forbidden - insufficient permissions
-      content:
-        application/json:
-          schema:
-            $ref: '../components/schemas/common.yaml#/ErrorResponse'
-          example:
-            error: 'Insufficient permissions: read access to contacts required'
