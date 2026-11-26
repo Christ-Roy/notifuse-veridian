@@ -17,6 +17,14 @@ export type HubHeaders = Record<string, string>
 /** Tant que VERIDIAN_HMAC_REQUIRE_V2 est absent en prod, la v1 passe encore. Passer à false à la bascule. */
 export const HUB_V1_STILL_ACCEPTED = true
 
+let lastTimestamp = 0
+/** Horodatage ms STRICTEMENT croissant dans le processus : deux requêtes identiques lancées dans la même milliseconde
+ *  (5 provisions concurrentes du même corps) auraient sinon la même signature v2, refusée au second (« Signature already used »). */
+function nextTimestamp(): string {
+  lastTimestamp = Math.max(Date.now(), lastTimestamp + 1)
+  return String(lastTimestamp)
+}
+
 /** Chemin encodé et query brute de l'URL, comme Go (URL.EscapedPath, URL.RawQuery). */
 export function splitHubUrl(url: string): { path: string; rawQuery: string } {
   const u = new URL(url, 'http://placeholder.invalid')
@@ -31,7 +39,7 @@ export function signHubV2(
   body: string = '',
   opts: { timestamp?: string } = {}
 ): HubHeaders {
-  const ts = opts.timestamp ?? Date.now().toString()
+  const ts = opts.timestamp ?? nextTimestamp()
   const { path, rawQuery } = splitHubUrl(url)
   const bodyHash = crypto.createHash('sha256').update(body).digest('hex')
   const sig = crypto

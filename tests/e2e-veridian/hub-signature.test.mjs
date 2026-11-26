@@ -35,3 +35,9 @@ test('v1 : ts.corps, sans en-tête de version', () => {
   assert.equal(h['X-Veridian-Sig-Version'], undefined)
   assert.equal(h['X-Veridian-Hub-Signature'].length, 64)
 })
+
+test('même requête signée 500 fois dans la même milliseconde : toutes les signatures sont distinctes (usage unique)', () => {
+  const sigs = new Set()
+  for (let i = 0; i < 500; i++) sigs.add(signHubV2('s', 'POST', 'https://h/api/tenants/provision', '{"a":1}')['X-Veridian-Hub-Signature'])
+  assert.equal(sigs.size, 500)
+})

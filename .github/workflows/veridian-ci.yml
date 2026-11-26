@@ -1098,6 +1098,11 @@ jobs:
           # Runner JIT : pas de Chrome système. Chromium Playwright ; les bibliothèques système sont dans l'image
           # du runner (Playwright 1.59.1, 10/11/2026) : pas de --with-deps (apt-get inutile). Le binaire va dans le cache.
           npx playwright install chromium
+      - name: Typecheck E2E + test de l'aide de signature Hub (vecteurs Go)
+        run: |
+          cd tests/e2e-veridian
+          npx tsc --noEmit -p .
+          node --experimental-strip-types --test hub-signature.test.mjs prod-residue.test.mjs
       - name: Run e2e
         run: |
           cd tests/e2e-veridian
