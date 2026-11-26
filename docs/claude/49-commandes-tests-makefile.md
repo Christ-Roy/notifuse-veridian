@@ -30,3 +30,11 @@ docker stop notifuse-go-pg-$USER
 ```
 
 ---
+
+## Pre-push (26/11/2026)
+
+Le pre-push lance les tests Go (vet + test) des paquets que le push modifie, et le typecheck E2E si `tests/e2e-veridian`
+bouge, par `scripts/ci/lourd-ou-local.sh` : `lourd-si-bastion` sur le bastion (rise ou node02, nice 19), sur place ailleurs.
+Si lourd n'a rien fait tourner (NON ABOUTI), l'étape est relancée ici en `nice -n 19` : un « non abouti » ne laisse jamais
+passer. i18n reste local (il réécrit les `.po` à commiter). Prouvé : un test cassé exprès dans `mxgate` fait refuser le push
+(FAIL lu sur rise), le vert passe. Les suites complètes à la main : `lourd --go go test ./...`, jamais en direct sur le bastion.
