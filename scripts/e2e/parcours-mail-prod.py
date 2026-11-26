@@ -7,7 +7,7 @@ arrêt de la séquence sur réponse, désinscription en un clic, puis retrait de
 
 Aucun mail ne sort vers un tiers : expéditeur ET destinataire sont deux adresses neuves de messagerie-nord-776.fr, portées
 par cet espace seul. Envoi réel seulement avec --real-send (règle 3 du dépôt ; GO de la parente, brief du 26/11).
-Usage : parcours_mail_prod.py --real-send [--ws <espace> --hub-tenant <tenant>] [--stamp lot2611] [--reprendre etat.json]
+Usage : parcours_mail_prod.py --real-send [--ws <espace> --hub-tenant <tenant>] [--stamp lot2611] [--ouvrir] [--autre-nom "Nom"] [--reprendre etat.json]
 Sortie 0 = parcours prouvé, 1 = écart, 2 = non abouti."""
 import argparse, json, os, re, subprocess, sys, time, urllib.request, urllib.error
 
@@ -22,6 +22,8 @@ ap.add_argument("--reprendre")
 ap.add_argument("--nettoyer-seulement", action="store_true")
 ap.add_argument("--ws", help="espace de l'org jetable (sinon WS ci-dessus)")
 ap.add_argument("--hub-tenant", help="tenant de l'org jetable (sinon HUB_TENANT ci-dessus)")
+ap.add_argument("--ouvrir", action="store_true", help="ouvre le mail reçu (pixel) et suit son lien suivi, comme un lecteur : message.opened et clicked")
+ap.add_argument("--autre-nom", help="réponse humaine de plus depuis une adresse neuve (parcours-autre-<stamp>@), absente du CRM, sous ce nom affiché")
 ap.add_argument("--stamp", help="suffixe imposé des adresses d'épreuve (ex. lot2611, quand le Hub a déjà posé la personne au CRM)")
 a = ap.parse_args()
 WS, HUB_TENANT = a.ws or WS, a.hub_tenant or HUB_TENANT
@@ -34,6 +36,7 @@ S = E["stamp"]
 # Envoi par le relais AGENCE (le relais nord se croit destinataire de messagerie-nord-776.fr et livre en local, mesuré le 26/11) :
 # l'expéditeur est sur agence-veridian.fr (DKIM aligné), la boîte et l'adresse de retour sur le domaine servi par le MX Notifuse.
 ENVOI, BOITE, RETOUR = f"parcours-envoi-{S}@agence-veridian.fr", f"parcours-boite-{S}@{DOM}", f"parcours-retour-{S}@{DOM}"
+AUTRE = f"parcours-autre-{S}@{DOM}"  # --autre-nom : une personne absente du CRM, que la réponse crée
 ecarts = []
 
 
@@ -88,13 +91,13 @@ def nettoyer():
     w = api("GET", "/api/workspaces.get", id=WS)["workspace"]
     s = w["settings"]
     for k in ("marketing_email_provider_id", "transactional_email_provider_id"):
-        if s.get(k) in (E.get("integ_envoi"), E.get("integ_boite")):
+        if s.get(k) in (E.get("integ_envoi"), E.get("integ_boite"), E.get("integ_autre")):
             s[k] = ""
     api("POST", "/api/workspaces.update", {"id": WS, "name": w["name"], "settings": s}, check=False)
-    for k in ("integ_envoi", "integ_boite"):
+    for k in ("integ_envoi", "integ_boite", "integ_autre"):
         if E.get(k):
             print("suppression profil", k, ":", api("POST", "/api/workspaces.deleteIntegration", {"workspace_id": WS, "integration_id": E[k]}, check=False).get("_rc", "ok"))
-    left = [i for i in api("GET", "/api/workspaces.get", id=WS)["workspace"].get("integrations") or [] if i["id"] in (E.get("integ_envoi"), E.get("integ_boite"))]
+    left = [i for i in api("GET", "/api/workspaces.get", id=WS)["workspace"].get("integrations") or [] if i["id"] in (E.get("integ_envoi"), E.get("integ_boite"), E.get("integ_autre"))]
     preuve("nettoyage : plus aucun profil d'épreuve", not left, f"{len(left)} restant(s)")
 
 
@@ -112,14 +115,17 @@ try:
         c = creds()
         if not c.get("SMTP_AGENCE_USER3") or not c.get("SMTP_AGENCE_PW3"):
             print("NON ABOUTI : accès SASL du relais agence introuvables"); sys.exit(2)
-        for key, senders, nom in (("integ_envoi", [("s1", ENVOI, True), ("s2", RETOUR, False)], f"parcours-envoi-{S}"), ("integ_boite", [("s1", BOITE, True)], f"parcours-boite-{S}")):
+        profils = [("integ_envoi", [("s1", ENVOI, True), ("s2", RETOUR, False)], f"parcours-envoi-{S}"), ("integ_boite", [("s1", BOITE, True)], f"parcours-boite-{S}")]
+        if a.autre_nom:
+            profils.append(("integ_autre", [("s1", AUTRE, True)], f"parcours-autre-{S}"))
+        for key, senders, nom in profils:
             r = api("POST", "/api/workspaces.createIntegration", {"workspace_id": WS, "name": nom, "type": "email", "provider": {
                 "kind": "smtp", "smtp": {"host": c.get("SMTP_AGENCE_HOST", "smtp.agence-veridian.fr"), "port": int(c.get("SMTP_AGENCE_PORT", "587")),
                                          "username": c["SMTP_AGENCE_USER3"], "password": c["SMTP_AGENCE_PW3"], "use_tls": True},
                 "rate_limit_per_minute": 10, "veridian_profile_daily_cap": 3,
                 "veridian_sending_window": {"start_hour": 0, "end_hour": 24, "timezone": "UTC"},
                 "veridian_provider_class_rates": {k: 10 for k in CLASSES}, "veridian_provider_class_daily_cap": {k: 3 for k in CLASSES},
-                "senders": [{"id": i, "email": ad, "name": "Veridian Parcours", "is_default": d} for i, ad, d in senders]}})
+                "senders": [{"id": i, "email": ad, "name": a.autre_nom if key == "integ_autre" else "Veridian Parcours", "is_default": d} for i, ad, d in senders]}})
             E[key] = r["integration_id"]; save()
         w = api("GET", "/api/workspaces.get", id=WS)["workspace"]
         w["settings"]["marketing_email_provider_id"] = E["integ_envoi"]
@@ -231,6 +237,29 @@ try:
         preuve("List-Unsubscribe en un clic (RFC 8058)", bool(lu) and bool(lup), f"{E['entetes']['list_unsubscribe']} | {E['entetes']['list_unsubscribe_post']}")
         print("Authentication-Results :", ar or "absent (le récepteur ne l'écrit pas encore : lot D1)")
 
+    # 5 bis. --ouvrir : le lecteur ouvre le mail (pixel) et clique son lien suivi (activité Mail vers le Hub, fiche 98).
+    if a.ouvrir and not E.get("ouvert"):
+        raw = subprocess.run(["notifuse-admin", "--env", "prod", "mail:raw", WS, "--id", str(E["recu"])], capture_output=True, timeout=120).stdout
+        import email as _email
+        from email import policy as _policy
+        html = next((p.get_content() for p in _email.message_from_bytes(raw, policy=_policy.default).walk() if p.get_content_type() == "text/html"), "")
+        pix = [u for u in re.findall(r'<img[^>]+src="([^"]+)"', html) if "/t/" in u or "/opens" in u]
+        lien = [u for u in re.findall(r'href="([^"]+)"', html) if "/r/" in u or "/visit" in u]
+        ua = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36"}
+        res = {}
+        for nom, urls in (("ouverture", pix), ("clic", lien)):
+            if not urls:
+                res[nom] = "absent"
+                continue
+            try:
+                with urllib.request.urlopen(urllib.request.Request(urls[0], headers=ua), timeout=20) as r:
+                    res[nom] = r.status
+            except urllib.error.HTTPError as e:
+                res[nom] = e.code
+            time.sleep(2)
+        E["ouvert"] = {"a": time.strftime("%H:%M:%SZ", time.gmtime()), **res}; save()
+        preuve("ouverture et clic du lecteur", res.get("ouverture") == 200 and res.get("clic") not in (None, "absent"), str(E["ouvert"]))
+
     # 6. Réponse humaine depuis la boîte d'épreuve, retour au MX, arrêt de la séquence.
     if not E.get("reponse"):
         r = cli("mail:reply", WS, "--id", str(E["recu"]), "--profile", E["integ_boite"], "--to", RETOUR,
@@ -253,6 +282,21 @@ try:
         moi = [x for x in rows if (x.get("contact_email") or x.get("email")) == BOITE]
         preuve("séquence arrêtée sur réponse", bool(moi) and all(x.get("status") in ("exited", "completed", "stopped") for x in moi),
                str([(x.get("status"), x.get("exit_reason") or x.get("reason")) for x in moi]))
+
+    # 6 bis. --autre-nom : réponse humaine d'une adresse absente du CRM ; le Hub crée la personne sous ce nom (from_name, VER-247).
+    if a.autre_nom and E.get("integ_autre") and not E.get("autre_recue"):
+        if not E.get("autre_reponse"):
+            r = cli("mail:reply", WS, "--id", str(E["recu"]), "--profile", E["integ_autre"], "--to", RETOUR,
+                    "--text", f"Bonjour, je suis une autre personne ({S}). Rappelez-moi.", "--yes", "--json", check=False)
+            E["autre_reponse"] = r; save()
+            preuve("réponse depuis l'adresse absente du CRM envoyée", r.get("_rc") in (None, 0) and "error" not in json.dumps(r).lower(), json.dumps(r, ensure_ascii=False)[:200])
+        t0, rr = time.time(), None
+        while time.time() - t0 < 900 and not rr:
+            time.sleep(20)
+            l = api("GET", "/api/veridian/mail.messages.list", check=False, workspace_id=WS, direction="in", kind="reply_human", limit=20)
+            rr = next((m for m in (l.get("messages") if isinstance(l, dict) else l) or [] if AUTRE in json.dumps(m).lower()), None)
+        E["autre_recue"] = rr and {k: rr.get(k) for k in ("id", "from", "from_name", "received_at")}; save()
+        preuve("réponse de l'adresse absente du CRM reçue, nom affiché", bool(rr) and (rr or {}).get("from_name") == a.autre_nom, str(E["autre_recue"]))
 
     # 7. Désinscription en un clic depuis l'en-tête du mail reçu.
     if not E.get("desinscrit"):
