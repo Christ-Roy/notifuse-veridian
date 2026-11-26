@@ -59,7 +59,15 @@ de **Notifuse vers le relais** (chiffrés dans l'intégration, jamais montrés a
 | Accès | `internal/veridian/boxaccess`, table système `veridian_box_access` (V75), routes `mail.access.*`, CLI `mail:access*` | droit `workspace:write` |
 | IMAP | `internal/veridian/imapgate`, capacité `boites` | `VERIDIAN_IMAP_ENABLED`, `_PORT` (1993), `_PUBLIC_PORT`, `_BEHIND_TLS_PROXY`, `_PROXY_PROTOCOL`, `VERIDIAN_BOX_HOST`, `_MAX_CONNS_PER_IP`, `_TRUSTED_PROXIES` |
 | SMTP de boîte | `internal/veridian/boxsend`, par le bridge (71) : mot de passe de boîte = pas un jeton | `SMTP_BRIDGE_*`, `VERIDIAN_BOX_SMTP_MAX_CONNS_PER_IP`, `_TRUSTED_PROXIES` |
-| Récepteur | `internal/veridian/mxgate` + `mxauth`, capacité `mx` | `VERIDIAN_MX_DOMAINS` (vide = éteint), `VERIDIAN_MX_HOST`, `_PORT` (2525), `_PROXY_PROTOCOL`, `_MAX_CONNS_PER_IP`, `_TRUSTED_PROXIES` |
+| Récepteur | `internal/veridian/mxgate` + `mxauth`, capacité `mx` | `VERIDIAN_MX_DOMAINS` (vide = éteint ; `domaine=espace` déclare le propriétaire), `VERIDIAN_MX_HOST`, `_PORT` (2525), `_PROXY_PROTOCOL`, `_MAX_CONNS_PER_IP`, `_TRUSTED_PROXIES` |
+
+**Attrape-tout du domaine (26/11/2026).** Aucune adresse d'un domaine d'envoi ne rebondit : une adresse sans profil
+(contact@, postmaster@, abuse@, une faute de frappe) va dans la boîte du propriétaire du domaine, celle de sa plus petite
+adresse sur ce domaine. Propriétaire = `domaine=espace` dans `VERIDIAN_MX_DOMAINS`, sinon l'espace unique qui porte des
+profils sur le domaine ; domaine partagé sans déclaration : adresses exactes seulement, jamais deviné. Mesuré le 26/11 :
+l'ancien repli postmaster@ (plus petite adresse tous espaces confondus) tombait chez greenbeamcraft, client qui redirige
+ses réponses chez lui. `messagerie-nord-776.fr=robertbrunon`. Le relais nord garde en local archive@ et contact@
+seulement si on le lui demande : depuis le 26/11 il remet tout le reste à `smtp:[mx.veridian.site]:25`.
 
 - Dossiers : `INBOX` (réponses, autres), `Rejets` (rebonds, rapports), `Sent`, `Trash` (masqués). Rien n'est supprimé : purger la
   corbeille masque, l'API garde tout. UID = `seq`, jamais réattribué. Pas de `Drafts` : un dépôt est refusé, jamais avalé.

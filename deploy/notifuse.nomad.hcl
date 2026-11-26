@@ -286,7 +286,9 @@ VERIDIAN_MX_PROXY_PROTOCOL=true
 VERIDIAN_MX_TRUSTED_PROXIES=172.26.64.1/32,100.88.202.29/32
 VERIDIAN_IMAP_TRUSTED_PROXIES=172.26.64.1/32,100.88.202.29/32
 VERIDIAN_BOX_SMTP_TRUSTED_PROXIES=172.26.64.1/32,100.88.202.29/32
-VERIDIAN_MX_DOMAINS=messagerie-nord-776.fr
+# « domaine=espace » : l'espace propriétaire reçoit les adresses sans profil (contact@, postmaster@...). robertbrunon = Veridian,
+# sans redirection ; jamais greenbeamcraft (client, redirige ses réponses chez lui). 26/11/2026, fiche 84.
+VERIDIAN_MX_DOMAINS=messagerie-nord-776.fr=robertbrunon
 VERIDIAN_MX_HOST=mx.veridian.site
 SMTP_BRIDGE_TLS=starttls
 VERIDIAN_RELAY_CERT_MANAGED=true

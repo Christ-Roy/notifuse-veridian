@@ -2,6 +2,7 @@ package module
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/Notifuse/notifuse/internal/service/queue"
@@ -25,6 +26,10 @@ func TestReadSettings(t *testing.T) {
 	s, err := ReadSettings(env(map[string]string{"VERIDIAN_MX_DOMAINS": "a.fr, b.fr,", "VERIDIAN_MX_HOST": "mx.test", "VERIDIAN_MX_PORT": "3525", "VERIDIAN_MX_PROXY_PROTOCOL": "true"}))
 	if err != nil || len(s.Domains) != 2 || s.Port != 3525 || !s.PROXYv2 {
 		t.Fatalf("%+v %v", s, err)
+	}
+	// « domaine=espace » déclare le propriétaire de l'attrape-tout ; la valeur passe intacte à l'annuaire.
+	if s, err := ReadSettings(env(map[string]string{"VERIDIAN_MX_DOMAINS": "a.fr=rb", "VERIDIAN_MX_HOST": "mx.test"})); err != nil || fmt.Sprint(s.Domains) != "[a.fr=rb]" {
+		t.Fatalf("propriétaire déclaré : %+v %v", s, err)
 	}
 	for _, m := range []map[string]string{{"VERIDIAN_MX_DOMAINS": "a.fr"}, {"VERIDIAN_MX_PORT": "x"}} {
 		if _, err := ReadSettings(env(m)); err == nil {

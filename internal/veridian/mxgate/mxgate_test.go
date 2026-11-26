@@ -147,15 +147,68 @@ func TestReceive_StoredThenDispatched(t *testing.T) {
 	if !strings.HasPrefix(string(f.raw), "Return-Path: <p@client.fr>\r\nReceived: from [127.0.0.1] by mx.test") || !strings.HasSuffix(string(f.raw), "\r\nOui\r\n") {
 		t.Fatalf("trace : %q", f.raw)
 	}
-	if err := send(addr, "postmaster@boite.fr"); err != nil || len(f.got) != 2 || !strings.HasPrefix(f.got[1], "gbc/") {
-		t.Fatalf("postmaster : %v %v", err, f.got)
+	// Domaine partagé par deux espaces, propriétaire non déclaré : postmaster@ ne se devine pas (avant le 26/11, il partait
+	// chez « gbc », plus petite adresse, un client qui redirige son courrier).
+	if err := send(addr, "postmaster@boite.fr"); err == nil || !strings.HasPrefix(err.Error(), "550") || len(f.got) != 1 {
+		t.Fatalf("postmaster d'un domaine partagé sans propriétaire : %v %v", err, f.got)
 	}
 	if l.n != 1 {
 		t.Fatalf("annuaire relu %d fois en une minute", l.n)
 	}
 	f.dup = true
-	if err := send(addr, "jc@boite.fr"); err != nil || len(f.msgs) != 2 {
+	if err := send(addr, "jc@boite.fr"); err != nil || len(f.msgs) != 1 {
 		t.Fatalf("une copie ne relance pas les consommateurs : %v, %d", err, len(f.msgs))
+	}
+}
+
+func startDomains(t *testing.T, f *fake, l *lister, domains ...string) string {
+	t.Helper()
+	s, err := New(Config{Hostname: "mx.test", Directory: NewProfiles(l, domains), Ingest: f, Dispatch: f, Blocklist: f, Limiter: f, Auth: mxauth.New(zone()), Logger: logger.NewLogger()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() { _ = s.Serve(ln) }()
+	t.Cleanup(func() { _ = s.Close() })
+	return ln.Addr().String()
+}
+
+// Attrape-tout : contact@, postmaster@ ou une faute de frappe vont dans la boîte du propriétaire du domaine ; une adresse
+// de profil reste à son profil, même dans un autre espace ; un autre domaine ouvert, partagé et sans propriétaire, refuse.
+func TestReceive_AttrapeToutAuProprietaire(t *testing.T) {
+	l := &lister{ws: []*domain.Workspace{ws("gbc", "jc@boite.fr"), ws("rb", "zz@boite.fr", "r@boite.fr", "x@ailleurs.fr"),
+		ws("seul", "a@solo.fr"), ws("p1", "u@partage.fr"), ws("p2", "v@partage.fr")}}
+	f := &fake{}
+	addr := startDomains(t, f, l, " Boite.fr = rb ", "solo.fr", "partage.fr")
+	for _, to := range []string{"contact@boite.fr", "POSTMASTER@boite.fr", "fautedefrappe@boite.fr"} {
+		f.got = nil
+		if err := send(addr, to); err != nil || fmt.Sprint(f.got) != "[rb/rb-p1/mx:rb-p1]" {
+			t.Fatalf("%s : %v %v (attendu la boîte r@ de rb, plus petite adresse de rb sur le domaine)", to, err, f.got)
+		}
+	}
+	f.got = nil
+	if err := send(addr, "jc@boite.fr"); err != nil || fmt.Sprint(f.got) != "[gbc/gbc-p0/mx:gbc-p0]" {
+		t.Fatalf("une adresse de profil reste à son espace : %v %v", err, f.got)
+	}
+	f.got = nil
+	if err := send(addr, "contact@solo.fr"); err != nil || fmt.Sprint(f.got) != "[seul/seul-p0/mx:seul-p0]" {
+		t.Fatalf("domaine d'un seul espace, propriétaire implicite : %v %v", err, f.got)
+	}
+	f.got = nil
+	if err := send(addr, "contact@partage.fr"); err == nil || !strings.HasPrefix(err.Error(), "550") || len(f.got) != 0 {
+		t.Fatalf("domaine partagé sans propriétaire : %v %v", err, f.got)
+	}
+	if err := send(addr, "contact@gmail.com"); err == nil || !strings.HasPrefix(err.Error(), "550") {
+		t.Fatalf("pas d'open relay : %v", err)
+	}
+	// Propriétaire déclaré mais sans boîte sur le domaine : rien n'est rangé ailleurs.
+	f2 := &fake{}
+	addr2 := startDomains(t, f2, l, "boite.fr=inconnu")
+	if err := send(addr2, "contact@boite.fr"); err == nil || !strings.HasPrefix(err.Error(), "550") || len(f2.got) != 0 {
+		t.Fatalf("propriétaire sans boîte : %v %v", err, f2.got)
 	}
 }
 
