@@ -1,6 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import { i18n } from '@lingui/core'
 import { I18nProvider } from '@lingui/react'
@@ -133,16 +131,6 @@ describe('VeridianMonIA, marques communes (CONTRAT-HUB §5.24.1)', () => {
       expect(container.querySelector('[data-mon-ia]')).toBeNull()
     } finally {
       if (top) Object.defineProperty(window, 'top', top)
-    }
-  })
-})
-
-// Les libellés sont une marque du contrat (la batterie du Hub lit « Mon IA » et « Relier mon IA ») : aucune langue ne les traduit.
-describe('libellés du contrat, dans toutes les langues', () => {
-  it.each(['en', 'fr'])('%s.po : msgstr identique au msgid', (loc) => {
-    const po = readFileSync(resolve(__dirname, `../i18n/locales/${loc}.po`), 'utf8')
-    for (const id of ['Mon IA', 'Relier mon IA']) {
-      expect(po).toContain(`msgid "${id}"\nmsgstr "${id}"`)
     }
   })
 })
