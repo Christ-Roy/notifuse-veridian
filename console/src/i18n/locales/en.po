@@ -13126,6 +13126,10 @@ msgstr "Template imported successfully"
 msgid "Template name"
 msgstr "Template name"
 
+#: src/components/messages/MessageHistoryTable.tsx
+msgid "Template not found"
+msgstr "Template not found"
+
 #: src/components/automations/nodes/EmailNode.tsx
 msgid "Template set"
 msgstr "Template set"

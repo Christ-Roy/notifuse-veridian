@@ -18,7 +18,7 @@ const page = await ctx.newPage()
 const erreurs = []
 let courante = ''
 page.on('console', (m) => { if (m.type() === 'error') erreurs.push(`${courante}: ${m.text().slice(0, 160)}`) })
-page.on('response', (r) => { if (r.status() >= 400 && r.url().includes('/api/')) erreurs.push(`${courante}: HTTP ${r.status()} ${new URL(r.url()).pathname}`) })
+page.on('response', (r) => { if (r.status() >= 400 && r.url().includes('/api/')) { const u = new URL(r.url()); erreurs.push(`${courante}: HTTP ${r.status()} ${u.pathname}${u.search}`) } })
 await page.goto(LIEN, { timeout: 90000 })
 try { await page.waitForURL('**/console/**', { timeout: 90000 }) } catch { console.log('NON ABOUTI : connexion'); process.exit(2) }
 const base = page.url().split('/console')[0]
@@ -32,7 +32,8 @@ for (const p of PAGES) {
   const m = await page.evaluate(() => ({ doc: document.documentElement.scrollWidth, ecran: window.innerWidth }))
   const txt = await page.evaluate(() => (document.querySelector('main') || document.body).innerText || '')
   const mots = [...new Set((txt.match(JARGON) || []))]
-  res.pages.push({ page: p, deborde_px: Math.max(0, m.doc - m.ecran), texte: txt.replace(/\s+/g, ' ').slice(0, 900), mots_suspects: mots, erreurs: [...erreurs].slice(0, 6) })
+  const ids = [...new Set(txt.match(/\b[a-z]+(?:-[a-z0-9]+)+\b/g) || [])].slice(0, 300)
+  res.pages.push({ page: p, deborde_px: Math.max(0, m.doc - m.ecran), texte: txt.replace(/\s+/g, ' ').slice(0, 900), ids, mots_suspects: mots, erreurs: [...erreurs].slice(0, 12) })
   const b = await page.screenshot({ type: 'jpeg', quality: 70, fullPage: true })
   console.log(`CAPTURE ${p}_${LARGEUR} ${b.toString('base64')}`)
 }

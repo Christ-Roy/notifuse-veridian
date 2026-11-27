@@ -13126,6 +13126,10 @@ msgstr "Plantilla importada correctament"
 msgid "Template name"
 msgstr "Nom de la plantilla"
 
+#: src/components/messages/MessageHistoryTable.tsx
+msgid "Template not found"
+msgstr ""
+
 #: src/components/automations/nodes/EmailNode.tsx
 msgid "Template set"
 msgstr "Conjunt de plantilles"

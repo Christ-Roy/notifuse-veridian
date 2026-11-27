@@ -13126,6 +13126,10 @@ msgstr "Modèle d'email importé avec succès"
 msgid "Template name"
 msgstr "Nom du modèle"
 
+#: src/components/messages/MessageHistoryTable.tsx
+msgid "Template not found"
+msgstr "Modèle introuvable"
+
 #: src/components/automations/nodes/EmailNode.tsx
 msgid "Template set"
 msgstr "Modèle d'email défini"

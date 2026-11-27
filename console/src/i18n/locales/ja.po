@@ -13126,6 +13126,10 @@ msgstr "テンプレートが正常にインポートされました"
 msgid "Template name"
 msgstr "テンプレート名"
 
+#: src/components/messages/MessageHistoryTable.tsx
+msgid "Template not found"
+msgstr ""
+
 #: src/components/automations/nodes/EmailNode.tsx
 msgid "Template set"
 msgstr "テンプレート設定済み"

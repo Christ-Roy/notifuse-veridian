@@ -13126,6 +13126,10 @@ msgstr "Vorlage erfolgreich importiert"
 msgid "Template name"
 msgstr "Vorlagenname"
 
+#: src/components/messages/MessageHistoryTable.tsx
+msgid "Template not found"
+msgstr ""
+
 #: src/components/automations/nodes/EmailNode.tsx
 msgid "Template set"
 msgstr "Vorlagensatz"

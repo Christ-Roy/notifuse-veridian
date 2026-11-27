@@ -16,6 +16,7 @@ import dayjs from '../../lib/dayjs'
 import { MessageHistory } from '../../services/api/messages_history'
 import TemplatePreviewDrawer from '../templates/TemplatePreviewDrawer'
 import { templatesApi } from '../../services/api/template'
+import { ApiError } from '../../services/api/client'
 import { Workspace } from '../../services/api/types'
 import { useQuery } from '@tanstack/react-query'
 import type { Broadcast } from '../../services/api/broadcast'
@@ -99,16 +100,23 @@ interface MessageHistoryTableProps {
 }
 
 // Nom du modèle à la place de son identifiant (le client lit un nom, pas un ID). Même clé de cache que l'aperçu.
+// Une requête par couple (modèle, version) : React Query dédoublonne par clé, donc jamais une par ligne.
+// Un 404 (modèle absent de cet espace, ex. envoi API « mail-api ») n'est pas réessayé et s'affiche en clair.
 export function TemplateNameCell({ workspaceId, templateId, version }: { workspaceId: string; templateId: string; version: number }) {
-  const { data } = useQuery({
+  const { t } = useLingui()
+  const { data, error, isError } = useQuery({
     queryKey: ['template', workspaceId, templateId, version],
     queryFn: async () => {
       const response = await templatesApi.get({ workspace_id: workspaceId, id: templateId, version })
       return response.template
     },
     enabled: !!workspaceId && !!templateId,
-    staleTime: 60 * 60 * 1000
+    staleTime: 60 * 60 * 1000,
+    retry: (failureCount, err) => !(err instanceof ApiError && err.status === 404) && failureCount < 2
   })
+  if (isError && error instanceof ApiError && error.status === 404) {
+    return <span className="text-xs text-gray-400">{t`Template not found`}</span>
+  }
   return <span className="text-xs">{data?.name || templateId}</span>
 }
 
