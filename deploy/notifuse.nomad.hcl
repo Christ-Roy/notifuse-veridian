@@ -1,16 +1,15 @@
 # notifuse (PROD) — job Nomad Veridian, source de vérité GitOps de CE repo.
 #
-# Sert les vrais clients sur https://notifuse.app.veridian.site (Model B : ingress
-# Traefik sur le bastion termine le TLS, cert Let's Encrypt DNS-01). Notifuse Go
-# port 8081, health /healthz. DB postgres:17 co-localisée dans le group (127.0.0.1:5432,
-# db notifuse_system), volume bind /opt/veridian-lab/notifuse sur OVH-PROD → job
-# STATEFUL épinglé provider=ovh-prod, PAS de reschedule (le volume ne suit pas l'alloc).
+# Sert les vrais clients sur https://notifuse.app.veridian.site (ingress Traefik, TLS Let's Encrypt). Notifuse Go
+# port 8081, health /healthz. Base sur la grappe pg-saas (Patroni), jointe par pg-saas-entree, présente sur chaque nœud
+# app (172.26.64.1:15432 route vers le primaire) : aucun état sur le nœud, le job n'est plus épinglé.
 # Secrets = Nomad Variable `nomad/jobs/notifuse` (JAMAIS en clair ici).
 #
-# ⚠️ PLACEMENT : migré du bastion (contabo) vers ovh-prod le 2026-07-15 par l'infra
-#    (commit nomad-veridian 82a79dc, bastion saturé). La DB (données) vit sur
-#    ovh-prod:/opt/veridian-lab/notifuse — NE PAS remettre provider=contabo (la copie
-#    du bastion est FIGÉE au 07-15 → servir une DB périmée). memory_max=7000 = fusible 60% VM.
+# DEUX EXEMPLAIRES (VER-270, 27/11/2026), un par zone des nœuds `app` (ovh-prod, app-01) : la perte d'un nœud ne coupe
+# plus Mail. Le HTTP, le relais SMTP, l'IMAP et le MX des boîtes sont servis par les deux. L'envoi, la relève IMAP, les
+# webhooks et le renouvellement du certificat ne tournent que sur l'exemplaire qui MÈNE (verrou consultatif PostgreSQL,
+# internal/veridian/leader) : leurs portes de débit vivent en mémoire, deux workers enverraient deux fois plus vite.
+# Coupe-circuit : VERIDIAN_LEADER=off, à n'employer qu'avec count = 1.
 # ⚠️ DÉPLOIEMENT — canon SSH-bastion (cf veridian-prospection/deploy/README.md,
 #    décision Robert 2026-07-11) : la CI (`veridian-ci.yml` job deploy-prod →
 #    scripts/ci/nomad-ssh-deploy.sh) pousse CE fichier au bastion via le verbe
@@ -57,16 +56,20 @@ job "notifuse" {
 # veridian-contract:end
 
   group "stack" {
-    count = 1
+    count = 2
 
-    # Épinglé à ovh-prod : db/data bind sur /opt/veridian-lab/notifuse d'ovh-prod (migré
-    # du bastion le 2026-07-15). Le volume ne suit pas l'alloc → NE PAS changer de nœud.
+    # Placement par étiquette, jamais par machine (cible d'infra du 27/11) : les nœuds `app` (ovh-prod zone ovh,
+    # app-01 zone app01), un exemplaire par zone. Les deux portent pg-saas-entree et le réseau tailscale.
     constraint {
-      attribute = "${meta.provider}"
-      value     = "ovh-prod"
+      attribute = "${meta.role}"
+      operator  = "set_contains"
+      value     = "app"
+    }
+    spread {
+      attribute = "${meta.zone}"
     }
 
-# veridian.db_max_connections=300 (base sur pg-saas depuis le 09/11 : a changer des deux cotes ensemble)
+# veridian.db_max_connections=300 (base sur pg-saas depuis le 09/11 : a changer des deux cotes ensemble ; 2 x 45 cote appli, VER-270)
     # Bleu-vert (08/11) : le canari demarre a cote de l'ancienne, Traefik et l'entree SMTP les servent toutes deux, la
     # promotion arrete l'ancienne apres son shutdown_delay. Possible depuis que le relais SMTP a un port dynamique : le
     # 587 fixe est tenu par le job notifuse-smtp-entree (nomad-veridian), qui suit le service `notifuse-smtp` au
@@ -247,15 +250,8 @@ job "notifuse" {
         }
         image = "ghcr.io/christ-roy/notifuse-veridian:${var.image_tag}"
         ports = ["http", "smtp", "imap", "mx", "boxsmtp"]
-        volumes = [
-          "/opt/veridian-lab/notifuse/data:/app/data",
-        ]
-
-        # 🔴 L'image ne porte aucun utilisateur applicatif nomme (Alpine
-        # minimal, /etc/passwd = root/postgres/nobody). Tournait en root
-        # jusqu'ici. uid 65534 (nobody) choisi ; le dossier hote
-        # /opt/veridian-lab/notifuse/data a ete rechown en 65534:65534
-        # AVANT ce deploiement (verifie : contenu vide, aucune perte).
+        # Plus de volume hôte (27/11) : /opt/veridian-lab/notifuse/data d'ovh-prod mesuré vide (4 Ko) et aucun code ne lit
+        # /app/data. L'image tourne en nobody (65534), rootfs en lecture seule, /tmp en tmpfs.
         mount {
           type     = "tmpfs"
           target   = "/tmp"
@@ -326,7 +322,9 @@ DB_SSLMODE=disable
 # Plafond TOTAL de l appli (systeme + tous les workspaces) : pg-saas sert 5 apps, max_connections=200 depuis le 09/11 (budget : Notifuse 80, Twenty 24-40, Hub 10, Prospection 8, CMS 5, plateforme ~15) ;
 # Notifuse en tenait 25 au repos et PostgreSQL refusait des connexions (53300, 09/11). Connexions inactives
 # fermees apres 15 s (le planificateur repasse toutes les 20 s : une connexion chaude par workspace n'a pas de sens).
-DB_MAX_CONNECTIONS=80
+# Deux exemplaires (VER-270) : 45 chacun, 90 au total. Le leader garde une connexion par espace (30 geres le 27/11) plus
+# le systeme et le HTTP ; le suiveur ne parcourt aucun espace (son worker ne voit rien) et ne sert que le HTTP.
+DB_MAX_CONNECTIONS=45
 DB_MAX_CONNECTIONS_PER_DB=2
 DB_CONNECTION_MAX_IDLE_TIME=15s
 DB_CONNECTION_MAX_LIFETIME=5m
