@@ -98,6 +98,20 @@ interface MessageHistoryTableProps {
   onColumnVisibilityChange?: (key: string, visible: boolean) => void
 }
 
+// Nom du modèle à la place de son identifiant (le client lit un nom, pas un ID). Même clé de cache que l'aperçu.
+export function TemplateNameCell({ workspaceId, templateId, version }: { workspaceId: string; templateId: string; version: number }) {
+  const { data } = useQuery({
+    queryKey: ['template', workspaceId, templateId, version],
+    queryFn: async () => {
+      const response = await templatesApi.get({ workspace_id: workspaceId, id: templateId, version })
+      return response.template
+    },
+    enabled: !!workspaceId && !!templateId,
+    staleTime: 60 * 60 * 1000
+  })
+  return <span className="text-xs">{data?.name || templateId}</span>
+}
+
 export function MessageHistoryTable({
   messages = [],
   loading,
@@ -175,7 +189,11 @@ export function MessageHistoryTable({
       render: (record: MessageHistory) => {
         return (
           <>
-            <span className="text-xs">{record.template_id}</span>
+            <TemplateNameCell
+              workspaceId={workspace.id}
+              templateId={record.template_id}
+              version={record.template_version}
+            />
             <span className="text-xs text-gray-500 pl-2">v{record.template_version}</span>
           </>
         )

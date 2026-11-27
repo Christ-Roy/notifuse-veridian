@@ -882,7 +882,7 @@ export function ContactsPage() {
         </Space>
       ),
       key: 'actions',
-      width: 120,
+      width: 150,
       fixed: 'right' as const,
       align: 'right' as const,
       onHeaderCell: () => ({ className: 'contacts-fixed-col' }),
