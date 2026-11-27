@@ -26,9 +26,11 @@ import notifuse_common as nc  # noqa: E402
 
 st, p = nc.call_hmac("prod", "GET", "/api/veridian/membres?workspace_id=" + urllib.parse.quote(a.ws))
 mem = (p or {}).get("members") or []
-owner = next((m for r in ("owner", "admin") for m in mem if m.get("role") == r and m.get("hub_user_id")), None)
+# Jamais au nom d'un client (27/11) : seul un compte Veridian de l'espace (propriétaire, puis admin) se connecte.
+owner = next((m for r in ("owner", "admin") for m in mem if m.get("role") == r and m.get("hub_user_id")
+              and (m.get("email") or "").lower().endswith("@veridian.site")), None)
 if not owner:
-    print("NON ABOUTI : aucun propriétaire relié au Hub", st)
+    print("NON ABOUTI : aucun compte Veridian propriétaire ou admin relié au Hub dans cet espace", st)
     sys.exit(2)
 st, r = nc.call_hmac("prod", "POST", "/api/sso/issue-magic-link",
                      {"hub_user_id": owner["hub_user_id"], "email": owner["email"], "next": f"/console/workspace/{a.ws}"})
