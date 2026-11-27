@@ -722,6 +722,28 @@ func TestTreeNode_HasRelativeDates(t *testing.T) {
 		assert.True(t, node.HasRelativeDates())
 	})
 
+	// Reprise amont 37.0 : sans ce drapeau, une membership « pas dans les X jours » resterait figée
+	t.Run("returns true for contact property with not_in_the_last_days filter", func(t *testing.T) {
+		node := &TreeNode{
+			Kind: "leaf",
+			Leaf: &TreeNodeLeaf{
+				Source: "contacts",
+				Contact: &ContactCondition{
+					Filters: []*DimensionFilter{
+						{
+							FieldName:    "created_at",
+							FieldType:    "time",
+							Operator:     "not_in_the_last_days",
+							StringValues: []string{"30"},
+						},
+					},
+				},
+			},
+		}
+
+		assert.True(t, node.HasRelativeDates())
+	})
+
 	t.Run("returns true for contact with multiple filters including relative date", func(t *testing.T) {
 		node := &TreeNode{
 			Kind: "leaf",

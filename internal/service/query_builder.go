@@ -119,6 +119,8 @@ func (qb *QueryBuilder) initializeOperators() {
 		"before_date":       {sql: "<", requiresValue: true},
 		"after_date":        {sql: ">", requiresValue: true},
 		"in_the_last_days":  {sql: "", requiresValue: true}, // Special handling in buildCondition
+		// Pas dans les X derniers jours (reprise amont 37.0) : même traitement, condition inversée
+		"not_in_the_last_days": {sql: "", requiresValue: true},
 
 		// JSON array operators
 		"in_array": {sql: "?", requiresValue: true}, // JSONB array containment check
@@ -315,7 +317,7 @@ func (qb *QueryBuilder) parseFilter(filter *domain.DimensionFilter, argIndex int
 	}
 
 	// Special handling for in_the_last_days: treat as string (days count) not as date
-	if filter.Operator == "in_the_last_days" {
+	if filter.Operator == "in_the_last_days" || filter.Operator == "not_in_the_last_days" {
 		values, err = qb.getStringValues(filter)
 	} else {
 		switch fieldType {
@@ -886,10 +888,10 @@ func (qb *QueryBuilder) buildCondition(dbColumn, operator string, sqlOp sqlOpera
 		condition := fmt.Sprintf("%s %s $%d AND $%d", dbColumn, sqlOp.sql, argIndex, argIndex+1)
 		return condition, args, argIndex + 2, nil
 
-	case "in_the_last_days":
+	case "in_the_last_days", "not_in_the_last_days":
 		// Special handling for relative date filters
 		if len(values) != 1 {
-			return "", nil, argIndex, fmt.Errorf("in_the_last_days requires 1 value")
+			return "", nil, argIndex, fmt.Errorf("%s requires 1 value", operator)
 		}
 		var days int
 		switch v := values[0].(type) {
@@ -908,6 +910,11 @@ func (qb *QueryBuilder) buildCondition(dbColumn, operator string, sqlOp sqlOpera
 		// Note: Not using parameterized query for interval as PostgreSQL doesn't support it directly
 		// But the value is parsed as int so it's safe from SQL injection
 		condition := fmt.Sprintf("%s > NOW() - INTERVAL '%d days'", dbColumn, days)
+		if operator == "not_in_the_last_days" {
+			// Pas dans les X derniers jours (reprise amont 37.0) : un contact sans date n'a pas eu lieu
+			// dans les X derniers jours, donc il matche. Une simple négation l'exclurait en silence.
+			condition = fmt.Sprintf("(%s IS NULL OR %s <= NOW() - INTERVAL '%d days')", dbColumn, dbColumn, days)
+		}
 		return condition, args, argIndex, nil
 
 	default:

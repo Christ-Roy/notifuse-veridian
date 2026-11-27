@@ -231,6 +231,55 @@ func TestQueryBuilder_BuildSQL_SimpleConditions(t *testing.T) {
 		assert.Contains(t, sql, "updated_at > NOW() - INTERVAL '7 days'")
 		assert.Empty(t, args)
 	})
+
+	// Reprise amont 37.0 : « pas dans les X derniers jours » sur une date du contact.
+	// Un contact dont la date est vide n'a pas eu lieu dans les X jours : il doit matcher.
+	t.Run("time not_in_the_last_days condition keeps contacts with no date", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contacts",
+				Contact: &domain.ContactCondition{
+					Filters: []*domain.DimensionFilter{
+						{
+							FieldName:    "updated_at",
+							FieldType:    "time",
+							Operator:     "not_in_the_last_days",
+							StringValues: []string{"30"},
+						},
+					},
+				},
+			},
+		}
+
+		sql, args, err := qb.BuildSQL(tree)
+		require.NoError(t, err)
+		assert.Contains(t, sql, "(updated_at IS NULL OR updated_at <= NOW() - INTERVAL '30 days')")
+		assert.NotContains(t, sql, "updated_at > NOW()")
+		assert.Empty(t, args)
+	})
+
+	t.Run("time not_in_the_last_days rejects a non-numeric day count", func(t *testing.T) {
+		tree := &domain.TreeNode{
+			Kind: "leaf",
+			Leaf: &domain.TreeNodeLeaf{
+				Source: "contacts",
+				Contact: &domain.ContactCondition{
+					Filters: []*domain.DimensionFilter{
+						{
+							FieldName:    "updated_at",
+							FieldType:    "time",
+							Operator:     "not_in_the_last_days",
+							StringValues: []string{"trente"},
+						},
+					},
+				},
+			},
+		}
+
+		_, _, err := qb.BuildSQL(tree)
+		require.Error(t, err)
+	})
 }
 
 func TestQueryBuilder_BuildSQL_MultipleFilters(t *testing.T) {

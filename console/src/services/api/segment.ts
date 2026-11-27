@@ -39,6 +39,7 @@ export type FilterOperator =
   | 'before_date'
   | 'after_date'
   | 'in_the_last_days'
+  | 'not_in_the_last_days'
   | 'in_array'
 
 // Contact list operators
@@ -182,6 +183,7 @@ export type Operator =
   | 'before_date'
   | 'after_date'
   | 'in_the_last_days'
+  | 'not_in_the_last_days'
   | 'in_array'
 
 // Field type renderer interfaces

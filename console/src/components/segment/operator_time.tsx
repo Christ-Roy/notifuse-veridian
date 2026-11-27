@@ -189,3 +189,9 @@ export class OperatorInTheLastDays implements IOperator {
     )
   }
 }
+
+// Pas dans les X derniers jours (reprise amont 37.0) : même formulaire, opérateur inversé côté SQL
+export class OperatorNotInTheLastDays extends OperatorInTheLastDays {
+  type: Operator = 'not_in_the_last_days'
+  label = 'not in the last'
+}

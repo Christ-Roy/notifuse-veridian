@@ -62,7 +62,9 @@ const treeHasRelativeDates = (tree: TreeNode | null | undefined): boolean => {
     // Check contact property filters for relative date operators
     if (tree.leaf?.contact?.filters) {
       const hasRelativeDateFilter = tree.leaf.contact.filters.some(
-        (filter: DimensionFilter) => (filter.operator as string) === 'in_the_last_days'
+        (filter: DimensionFilter) =>
+          (filter.operator as string) === 'in_the_last_days' ||
+          (filter.operator as string) === 'not_in_the_last_days'
       )
       if (hasRelativeDateFilter) {
         return true
@@ -142,6 +144,42 @@ const DrawerSegment = (props: {
     }
     return null
   }, [workspaceId, workspaces])
+
+  // Compte en direct pendant l'édition (reprise amont 37.0) : chaque changement de l'arbre relance
+  // l'aperçu après une pause. Pendant le calcul, le dernier compte reste affiché ; une condition encore
+  // incomplète (erreur serveur) ne l'efface pas non plus.
+  const liveTree = Form.useWatch('tree', form) as TreeNode | undefined
+  const liveKey = JSON.stringify(liveTree ?? null)
+  useEffect(() => {
+    if (!workspaceId || !HasLeaf(liveTree)) return
+    const requestData: PreviewSegmentRequest = {
+      workspace_id: workspaceId,
+      tree: liveTree as TreeNode,
+      limit: 100
+    }
+    const key = JSON.stringify(requestData)
+    let cancelled = false
+    setLoadingPreview(true)
+    const timer = setTimeout(async () => {
+      try {
+        const res = await previewSegment(requestData)
+        if (cancelled) return
+        setPreviewResponse(res)
+      } catch {
+        // Condition incomplète : on garde le dernier compte affiché
+      } finally {
+        if (!cancelled) {
+          setPreviewedData(key)
+          setLoadingPreview(false)
+        }
+      }
+    }, 800)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seul l'arbre déclenche le calcul
+  }, [liveKey, workspaceId])
 
   // Auto-preview when editing an existing segment
   useEffect(() => {
