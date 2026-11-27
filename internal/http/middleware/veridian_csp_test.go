@@ -47,6 +47,13 @@ func TestVeridianCSPPolicy_SansInlineNiEval(t *testing.T) {
 			script = d
 		}
 	}
+	// VER-265 : aucun hôte tiers dans script-src (un CDN public comme jsdelivr sert n'importe quel paquet : contournement).
+	if script != "script-src 'self'" {
+		t.Fatalf("script-src doit être 'self' seul : %q", script)
+	}
+	if strings.Contains(p, "jsdelivr") {
+		t.Fatalf("jsdelivr ne doit plus apparaître dans la politique : %q", p)
+	}
 	if script == "" || strings.Contains(script, "unsafe-inline") || strings.Contains(script, "unsafe-eval") || strings.Contains(script, "*") || strings.Contains(script, " https: ") || strings.HasSuffix(script, " https:") {
 		t.Fatalf("script-src trop large : %q", script)
 	}

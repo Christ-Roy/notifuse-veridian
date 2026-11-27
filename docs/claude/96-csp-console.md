@@ -9,7 +9,10 @@ SPA statiques (Vite) : `script-src 'self'` sans `'unsafe-inline'` ni nonce.
   = changer la variable, aucun build.
 - Rapports : `POST /api/veridian/csp-report` (report-uri et report-to), journal `csp_violation` (directive, ressource
   bloquée et page réduites à origine + chemin, ni query ni extrait). Lire : `obs search csp_violation --since 1h`.
-- Besoins mesurés (26/11) : `cdn.jsdelivr.net` (Monaco chargé par `@monaco-editor/react`, workers `blob:`), styles inline
+- Besoins mesurés (26/11) : Monaco (`@monaco-editor/react`, workers `blob:`) servi par la console depuis le 27/11 (VER-265 :
+  `monaco-editor` 0.55.1, même version que le CDN, `min/vs` copié en `public/monaco/vs` par `vite.config.ts`, chargeur pointé par
+  `src/lib/veridian_monaco.ts`) ; `cdn.jsdelivr.net` est sorti de la politique (il sert n'importe quel paquet npm : contournement).
+  `csp-parcours.mjs` échoue si une requête part vers un CDN. Styles inline
   (Ant Design), images, polices et `connect-src` en `https:` (aperçus de mails, S3 choisi par le client). Le rempart est
   script-src.
 - `console/index.html` : plus aucun script inline (l'ancien `document.write` de config.js, inutile : config.js est

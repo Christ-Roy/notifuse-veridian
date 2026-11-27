@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Drawer, Button } from 'antd'
-import { Editor } from '@monaco-editor/react'
+import { Editor } from '../../../lib/veridian_monaco'
 import { useLingui } from '@lingui/react/macro'
 
 interface CodeDrawerInputProps {

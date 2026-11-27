@@ -14,6 +14,9 @@ export default defineConfig({
     // en local, tous les cœurs. Pas de timeout allongé : voir docs/claude/75.
     maxWorkers: process.env.CI ? '50%' : undefined,
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    // VER-265 : @monaco-editor/* traités en ESM comme dans le build. Chargés en CommonJS par défaut, leur `loader` arrive
+    // enveloppé ({ default }) et loader.config n'existe pas : les tests ne verraient pas ce que voit le navigateur.
+    server: { deps: { inline: [/@monaco-editor\//] } },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

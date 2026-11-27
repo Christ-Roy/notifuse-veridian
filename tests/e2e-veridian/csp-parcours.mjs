@@ -29,6 +29,13 @@ const envois = []
 ctx.on('request', (q) => { if (q.url().includes('/api/veridian/csp-report')) envois.push({ type: q.resourceType(), ct: q.headers()['content-type'] || '' }) })
 ctx.on('requestfinished', async (q) => { if (q.url().includes('/api/veridian/csp-report')) { const r = await q.response(); envois.push({ statut: r ? r.status() : null }) } })
 ctx.on('requestfailed', (q) => { if (q.url().includes('/api/veridian/csp-report')) envois.push({ echec: q.failure()?.errorText }) })
+// VER-265 : d'où vient Monaco ? La console le sert elle-même ; une seule requête vers un CDN public est un échec.
+const monacoSource = { local: 0, cdn: 0 }
+ctx.on('request', (q) => {
+  const u = q.url()
+  if (u.includes('/console/monaco/vs/')) monacoSource.local++
+  if (u.includes('cdn.jsdelivr.net') || u.includes('unpkg.com')) monacoSource.cdn++
+})
 const errors = []
 page.on('pageerror', (e) => errors.push(String(e.message).slice(0, 160)))
 let header = null
@@ -60,14 +67,14 @@ for (const p of PAGES) {
   res.violations.push(...v.map((x) => ({ page: p, ...x })))
   if (['dashboard', 'templates', 'inbox'].includes(p)) await shot(p)
 }
-// Éditeur de modèle : Monaco se charge depuis cdn.jsdelivr.net (la directive la plus fragile).
+// Éditeur de modèle : Monaco, servi par la console depuis /console/monaco/vs depuis VER-265 (27/11), plus par jsdelivr.
 await page.goto(`${base}/console/workspace/${WS}/templates`, { timeout: 90000 })
 await page.waitForTimeout(3000)
 const ligne = page.locator('table tbody tr').first()
 if (await ligne.count()) {
   await ligne.locator('button, a').first().click({ timeout: 10000 }).catch(() => ligne.click().catch(() => {}))
   await page.waitForTimeout(6000)
-  // Étape 2 (le constructeur), puis l'aperçu et son onglet MJML : c'est là que Monaco se charge depuis cdn.jsdelivr.net.
+  // Étape 2 (le constructeur), puis l'aperçu et son onglet MJML : c'est là que Monaco se charge.
   const etape2 = page.getByText(/^\s*2\.\s*(Template|Modèle)\s*$/).first()
   if (await etape2.count()) await etape2.click({ timeout: 5000 }).catch(() => {})
   else await page.getByRole('button', { name: /^(Next|Suivant)$/ }).first().click({ timeout: 5000 }).catch(() => {})
@@ -76,7 +83,7 @@ if (await ligne.count()) {
   await page.waitForTimeout(3000)
   await page.getByRole('tab', { name: /^MJML$/ }).first().click({ timeout: 5000 }).catch(() => {})
   await page.waitForTimeout(3000)
-  // Données de test : l'éditeur JSON est un Monaco (Preview.tsx), chargé à la demande depuis cdn.jsdelivr.net.
+  // Données de test : l'éditeur JSON est un Monaco (Preview.tsx), chargé à la demande.
   await page.getByRole('tab', { name: /Template Data|Données/ }).first().click({ timeout: 5000 }).catch(() => {})
   await page.waitForTimeout(2000)
   await page.getByRole('button', { name: /Edit Test Data|Modifier les données/ }).first().click({ timeout: 5000 }).catch(() => {})
@@ -103,6 +110,8 @@ if (attente > 0) await page.waitForTimeout(attente * 1000)
 await browser.close()
 const inattendues = res.violations.filter((x) => x.d !== 'script-src-attr')
 res.envois_rapports = envois.slice(0, 20)
+res.monaco_source = monacoSource
 console.log('RESULTAT ' + JSON.stringify(res))
-const ok = res.controle.rapporte > 0 && (header !== 'enforce' || !res.controle.execute) && inattendues.length === 0
+const monacoLocal = monacoSource.cdn === 0 && (!res.monaco || monacoSource.local > 0)
+const ok = res.controle.rapporte > 0 && (header !== 'enforce' || !res.controle.execute) && inattendues.length === 0 && monacoLocal
 process.exit(ok ? 0 : 1)

@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useLingui } from '@lingui/react/macro'
 import { Switch, Drawer, Button } from 'antd'
-import { Editor } from '@monaco-editor/react'
+import { Editor } from '../../../lib/veridian_monaco'
 import type { MJMLComponentType, MJStyleAttributes, MergedBlockAttributes, EmailBlock } from '../types'
 import {
   BaseEmailBlock,

@@ -12,7 +12,8 @@ import (
 // securite/CSP-MODELE.md). SPA statique (Vite) : script-src 'self' SANS 'unsafe-inline' ni nonce.
 //
 // Besoins mesurés de la console (inventaire du 26/11) :
-//   - cdn.jsdelivr.net : @monaco-editor/react charge Monaco depuis ce CDN (aucun loader.config local) ; ses workers en blob:.
+//   - Monaco (éditeur de gabarits) : servi par la console depuis /console/monaco/vs (VER-265, 27/11 : plus de cdn.jsdelivr.net,
+//     qui sert n'importe quel paquet npm et rendait script-src contournable) ; ses workers en blob:.
 //   - style 'unsafe-inline' : Ant Design pose ses styles à l'exécution (CSS-in-JS) et React des attributs style.
 //   - img/font/connect https: : aperçus de mails (images et polices des clients), gestionnaire de fichiers vers le S3
 //     que chaque client choisit (endpoint libre). Le rempart contre le XSS est script-src, pas ces directives.
@@ -29,9 +30,9 @@ const VeridianCSPReportPath = "/api/veridian/csp-report"
 func VeridianCSPPolicy() string {
 	return strings.Join([]string{
 		"default-src 'self'",
-		"script-src 'self' https://cdn.jsdelivr.net",
+		"script-src 'self'",
 		"worker-src 'self' blob:",
-		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
+		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
 		"font-src 'self' data: https:",
 		"img-src 'self' data: blob: https:",
 		"media-src 'self' https:",

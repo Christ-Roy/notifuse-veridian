@@ -28,3 +28,6 @@ playwright-report/
 playwright-report-prod-smoke/
 playwright/.cache/
 test-results/
+
+# VER-265 : copie de monaco-editor/min/vs, posée par vite.config.ts à chaque build
+public/monaco/

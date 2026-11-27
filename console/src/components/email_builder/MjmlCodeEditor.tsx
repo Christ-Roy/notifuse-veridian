@@ -8,7 +8,7 @@ import {
 } from '@ant-design/icons'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronDown, faQuestion } from '@fortawesome/free-solid-svg-icons'
-import Editor, { type OnMount, type BeforeMount } from '@monaco-editor/react'
+import Editor, { type OnMount, type BeforeMount } from '../../lib/veridian_monaco'
 import type { editor as MonacoEditor } from 'monaco-editor'
 import { useLingui } from '@lingui/react/macro'
 import type { MjmlCompileError } from '../../services/api/template'

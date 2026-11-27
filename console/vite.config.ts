@@ -5,11 +5,27 @@ import tailwindcss from '@tailwindcss/vite'
 import { lingui } from '@lingui/vite-plugin'
 import { fileURLToPath } from 'url'
 import { dirname, resolve } from 'path'
-import { readFileSync } from 'fs'
+import { cpSync, existsSync, readFileSync } from 'fs'
 import path from 'path'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+
+// VER-265 (27/11/2026) : Monaco servi par la console (public/monaco/vs), plus par cdn.jsdelivr.net, qui n'est donc plus
+// dans la CSP. Copié à chaque démarrage de Vite (dev et build) depuis node_modules ; absent = build en échec, jamais un
+// éditeur qui retomberait sur un CDN. Cf. src/lib/veridian_monaco.ts.
+function veridianMonacoSelfHosted() {
+  return {
+    name: 'veridian-monaco-self-hosted',
+    buildStart() {
+      const src = resolve(__dirname, 'node_modules/monaco-editor/min/vs')
+      if (!existsSync(resolve(src, 'loader.js'))) {
+        throw new Error('monaco-editor/min/vs introuvable : npm ci avant le build (VER-265)')
+      }
+      cpSync(src, resolve(__dirname, 'public/monaco/vs'), { recursive: true })
+    }
+  }
+}
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -74,6 +90,7 @@ export default defineConfig({
     }),
     tailwindcss(),
     lingui(),
+    veridianMonacoSelfHosted(),
   ],
   server: {
     host: 'notifusedev.com',

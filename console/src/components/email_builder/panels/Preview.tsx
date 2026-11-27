@@ -4,7 +4,7 @@ import { Segmented, Tooltip, Tabs, Splitter, Button, App } from 'antd'
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-react'
 import 'overlayscrollbars/overlayscrollbars.css'
 import { Highlight, themes } from 'prism-react-renderer'
-import { Editor } from '@monaco-editor/react'
+import { Editor } from '../../../lib/veridian_monaco'
 import { faDesktop, faMobileAlt } from '@fortawesome/free-solid-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 
