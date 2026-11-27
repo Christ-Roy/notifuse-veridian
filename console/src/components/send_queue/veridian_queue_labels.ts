@@ -3,6 +3,7 @@
 
 import { useLingui } from '@lingui/react/macro'
 import { i18n } from '@lingui/core'
+import { useProfileLabels } from '../sending_profiles/veridian_profile_labels'
 
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—'
@@ -13,6 +14,7 @@ export function formatDateTime(iso: string | null | undefined): string {
 
 export function useQueueLabels() {
   const { t } = useLingui()
+  const profile = useProfileLabels()
 
   const reasonLabel = (code: string): string => {
     switch (code) {
@@ -74,6 +76,10 @@ export function useQueueLabels() {
           return detail
       }
     }
+    // Détail brut du moteur (« class=corporate_selfhost », « reopens=2026-…Z ») : jamais affiché tel quel à un client.
+    // La réouverture est déjà dans la colonne « Prochaine tentative » : on la masque ici.
+    if (detail.startsWith('reopens=')) return ''
+    if (detail.startsWith('class=')) return profile.classLabel(detail.slice('class='.length))
     return detail
   }
 

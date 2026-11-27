@@ -43,7 +43,9 @@ nav = "NAVIGATEUR=firefox " if a.firefox else ""
 extra = "".join(f"{e} " for e in a.env if e.split("=", 1)[0].isidentifier() and "'" not in e and " " not in e)
 # Playwright 1.60.0 : la version des navigateurs de l'image lourd --navigateur (/ms-playwright).
 cmd = ["lourd", "--navigateur", "--secrets", "LIEN", "sh", "-c",
-       f"npm i --no-audit --no-fund @playwright/test@1.60.0 >/dev/null 2>&1 && PLAYWRIGHT_BROWSERS_PATH=/ms-playwright EXIGER_MONACO=1 {nav}{extra}node {a.parcours} {a.ws}"]
+       # Installation dans un dossier temporaire du runner : tests/e2e-veridian appartient à un autre uid (pwuser),
+       # npm y échoue en EACCES et le job sort 243 sans rien afficher (constaté le 27/11).
+       f"D=$(mktemp -d) && cd \"$D\" && npm i --no-audit --no-fund @playwright/test@1.60.0 >/dev/null 2>&1 && cp \"$OLDPWD/{a.parcours}\" . && PLAYWRIGHT_BROWSERS_PATH=/ms-playwright EXIGER_MONACO=1 {nav}{extra}node {a.parcours} {a.ws}"]
 pr = subprocess.run(cmd, env=dict(os.environ, LIEN=link), capture_output=True, text=True, timeout=1800,
                     cwd=os.path.join(racine, "tests", "e2e-veridian"))
 os.makedirs(a.sortie, exist_ok=True)

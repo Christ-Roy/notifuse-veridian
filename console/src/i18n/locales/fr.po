@@ -14,6 +14,14 @@ msgstr ""
 "Plural-Forms: \n"
 "X-Generator: @lingui/cli\n"
 
+#: src/components/settings/WorkspaceMembers.tsx
+msgid "Member"
+msgstr "Membre"
+
+#: src/components/settings/WorkspaceMembers.tsx
+msgid "Owner"
+msgstr "Propriétaire"
+
 #: src/components/ai-assistant/useAIAssistant.tsx
 msgid " - Done"
 msgstr " - Terminé"

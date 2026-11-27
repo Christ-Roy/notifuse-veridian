@@ -137,7 +137,9 @@ export function WorkspaceMembers({
           ? t`Invitation sent`
           : role === 'admin'
             ? t`Veridian Admin`
-            : role.charAt(0).toUpperCase() + role.slice(1)
+            : isWorkspaceOwner(role)
+              ? t`Owner`
+              : t`Member`
 
         return (
           <Tag bordered={false} color={isWorkspaceOwner(role) ? 'gold' : role === 'admin' ? 'geekblue' : 'blue'}>
