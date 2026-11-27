@@ -31,6 +31,7 @@ FIN_SERVEUR
 # sinon NON ABOUTI (rc 2), jamais un vert ni un rouge de complaisance.
 export NO_PROXY="127.0.0.1,localhost${NO_PROXY:+,$NO_PROXY}" no_proxy="127.0.0.1,localhost${no_proxy:+,$no_proxy}"
 unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy ALL_PROXY all_proxy
+command -v node >/dev/null 2>&1 || { echo "NON ABOUTI : node absent sur cette machine (le faux serveur est en Node)"; exit 2; }
 echec=0
 cas() { # cas <mode> <rc attendu>
   local port=$((20000 + RANDOM % 20000)) pret=0

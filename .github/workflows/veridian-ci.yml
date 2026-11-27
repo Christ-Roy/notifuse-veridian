@@ -1054,6 +1054,10 @@ jobs:
       # (step "Resolve staging DB container") → injecté dans GITHUB_ENV.
     steps:
       - uses: actions/checkout@v4
+      # setup-node AVANT la garde (27/11) : son autotest lance un faux serveur Node ; sans node, il rendait « non abouti » à chaque run.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Wake staging and require the deployed API
         run: |
           set -euo pipefail
@@ -1097,9 +1101,6 @@ jobs:
               echo "::warning::container db '$DB' introuvable — tests hub-sync-resilience seront skip"
             fi
           fi
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
       - name: Install Playwright
         run: |
           cd tests/e2e-veridian
