@@ -244,6 +244,27 @@ func ParseRow(i int, raw json.RawMessage) (row Row, reason string) {
 	return row, ""
 }
 
+// Missing : la part de la ligne qui complète une fiche déjà en base, sans jamais écraser une valeur présente (27/11/2026).
+// Champs simples : seulement ceux encore vides (st.Filled). Données d'enrichissement (custom_json_1) : seulement les clés absentes.
+// ok=false : la fiche n'a rien à recevoir. Le téléphone envoyé par Prospection n'atteignait jamais une fiche existante
+// (contacts.importer force existing=attach) : c'est le cas que cela règle.
+func (r Row) Missing(st Stored) (Row, bool) {
+	out := Row{Index: r.Index, Email: r.Email, Siren: r.Siren, Domains: r.Domains, Fields: map[string]json.RawMessage{}, Extra: map[string]json.RawMessage{}}
+	for k, v := range r.Fields {
+		if !st.Filled[k] {
+			out.Fields[k] = v
+		}
+	}
+	var old map[string]json.RawMessage
+	_ = json.Unmarshal(st.JSON1, &old)
+	for k, v := range r.Extra {
+		if _, ok := old[k]; !ok {
+			out.Extra[k] = v
+		}
+	}
+	return out, len(out.Fields) > 0 || len(out.Extra) > 0
+}
+
 // Contact construit la fiche. existing : custom_json_1 déjà en base (complété, jamais écrasé en bloc).
 func (r Row) Contact(existing json.RawMessage) (*domain.Contact, error) {
 	extra := map[string]json.RawMessage{}

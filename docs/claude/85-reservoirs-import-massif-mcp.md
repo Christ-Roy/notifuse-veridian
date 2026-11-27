@@ -48,3 +48,9 @@ Un import qui porte la signature de l'export de prospection (custom_string_2 en 
 connue, aucune valeur hors format) nomme les champs qu'il remplit : Activité, Priorité, Département, Entreprise, Messagerie, Score
 (`reservoir/labels.go`). Un libellé déjà choisi par l'espace gagne toujours, une seule instruction SQL (jamais un réglage écrasé).
 Mesuré en prod : d'autres espaces emploient ces champs autrement (ville, espèce d'animal), d'où la signature stricte.
+
+## Mode attach : compléter sans écraser (27/11/2026)
+`existing=attach` (défaut) complète une fiche existante de même adresse : champs simples vides (`Stored.Filled`, lu par
+`to_jsonb`), clés absentes de `custom_json_1`. Une valeur présente n'est jamais réécrite (`Row.Missing`). Une fiche rapprochée par
+domaine ou SIREN (autre adresse) n'est jamais créée par ce biais. Séquence active sur `contact.updated` sans `allow_triggers` :
+rien n'est complété, l'import n'est pas refusé.

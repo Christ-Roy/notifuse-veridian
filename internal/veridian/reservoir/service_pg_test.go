@@ -233,7 +233,8 @@ func TestIntake_MiseAJourPreserveLaFiche(t *testing.T) {
 	}
 	assert.Equal(t, 0, post("skip").Subscribed)
 	assert.Equal(t, 1, post("").Subscribed, "par défaut : ajoutée à la liste")
-	assert.Equal(t, 0, b.count(`SELECT count(*) FROM contacts WHERE last_name IS NOT NULL`), "par défaut : fiche intacte")
+	// Depuis le 27/11 : par défaut, le champ vide est complété, la valeur présente reste.
+	assert.Equal(t, 1, b.count(`SELECT count(*) FROM contacts WHERE first_name='Ancien' AND last_name='Neuf' AND custom_json_1->>'note'='gardee'`), "par défaut : champs vides complétés, rien d'écrasé")
 	assert.Equal(t, 1, post("update").Updated)
 	assert.Equal(t, 1, b.count(`SELECT count(*) FROM contacts WHERE first_name='Ancien' AND last_name='Neuf' AND custom_json_1->>'note'='gardee' AND custom_json_1->>'siren'='352522304' AND created_at='2020-01-02T00:00:00Z'`))
 }
@@ -572,4 +573,44 @@ func TestStore_ContactStates(t *testing.T) {
 	got, err := b.svc.Store.ContactStates(context.Background(), "ws", []string{"absent@z.fr"})
 	require.NoError(t, err)
 	assert.Equal(t, []ContactState{{Email: "absent@z.fr", Lists: []ListIn{}, Sequences: []Named{}}}, got)
+}
+
+// 27/11/2026 (parente) : le téléphone envoyé par Prospection n'atteignait jamais une fiche existante, contacts.importer
+// forçant existing=attach. Une fiche existante reçoit ses champs vides, une valeur présente n'est jamais écrasée.
+func TestIntake_AttachCompleteLesChampsVidesSansEcraser(t *testing.T) {
+	b := newBench(t)
+	b.exec(`INSERT INTO contacts (email, created_at, updated_at) VALUES ('sans@lieu.test','2020-01-02T00:00:00Z',NOW())`)
+	b.exec(`INSERT INTO contacts (email, phone, custom_json_1, created_at, updated_at) VALUES ('avec@lieu.test','+33 1 00 00 00 01','{"site":"ancien.test"}',NOW(),NOW())`)
+	var r IntakeResult
+	require.Equal(t, 200, b.call("POST", "/api/veridian/contacts.intake", map[string]any{"workspace_id": "ws", "existing": "attach", "list_ids": []string{"reserve"},
+		"contacts": []json.RawMessage{
+			raw(`{"email":"neuf@autre-lieu.test","phone":"+34 600 000 001"}`),
+			raw(`{"email":"sans@lieu.test","phone":"+34 600 000 002","site":"lieu.test"}`),
+			raw(`{"email":"avec@lieu.test","phone":"+34 600 000 003","site":"nouveau.test"}`),
+		}}, &r))
+	assert.Equal(t, 1, r.Created)
+	assert.Equal(t, 2, r.Existing)
+	assert.Equal(t, 3, r.Subscribed, "les trois sont dans la liste")
+	assert.Equal(t, 1, b.count(`SELECT count(*) FROM contacts WHERE email='neuf@autre-lieu.test' AND phone='+34 600 000 001'`), "fiche neuve : son téléphone")
+	assert.Equal(t, 1, b.count(`SELECT count(*) FROM contacts WHERE email='sans@lieu.test' AND phone='+34 600 000 002' AND custom_json_1->>'site'='lieu.test' AND created_at='2020-01-02T00:00:00Z'`), "fiche sans téléphone : le reçoit")
+	assert.Equal(t, 1, b.count(`SELECT count(*) FROM contacts WHERE email='avec@lieu.test' AND phone='+33 1 00 00 00 01' AND custom_json_1->>'site'='ancien.test'`), "fiche avec téléphone : garde le sien")
+
+	// Rejouer le même lot ne réécrit rien : tout est déjà rempli.
+	var again IntakeResult
+	require.Equal(t, 200, b.call("POST", "/api/veridian/contacts.intake", map[string]any{"workspace_id": "ws", "existing": "attach",
+		"contacts": []json.RawMessage{raw(`{"email":"sans@lieu.test","phone":"+34 600 000 009"}`)}}, &again))
+	assert.Equal(t, 0, again.Updated)
+	assert.Equal(t, 1, b.count(`SELECT count(*) FROM contacts WHERE email='sans@lieu.test' AND phone='+34 600 000 002'`))
+}
+
+// Une séquence active démarre sur la mise à jour d'une fiche : l'import n'est pas refusé, la fiche n'est pas complétée.
+func TestIntake_AttachNeCompletePasSousUneSequenceDeMiseAJour(t *testing.T) {
+	b := newBench(t)
+	b.exec(`INSERT INTO contacts (email, created_at, updated_at) VALUES ('sans@lieu.test',NOW(),NOW())`)
+	b.exec(`INSERT INTO automations (id, workspace_id, name, status, trigger_config, root_node_id) VALUES ('maj','ws','maj','live','{"event_kind":"contact.updated"}','n1')`)
+	var r IntakeResult
+	require.Equal(t, 200, b.call("POST", "/api/veridian/contacts.intake", map[string]any{"workspace_id": "ws", "existing": "attach",
+		"contacts": []json.RawMessage{raw(`{"email":"sans@lieu.test","phone":"+34 600 000 002"}`)}}, &r))
+	assert.Equal(t, 0, r.Updated)
+	assert.Equal(t, 1, b.count(`SELECT count(*) FROM contacts WHERE email='sans@lieu.test' AND phone IS NULL`))
 }

@@ -203,6 +203,37 @@ func (s *Service) Intake(ctx context.Context, req IntakeRequest) (*IntakeResult,
 	res := &IntakeResult{DryRun: req.DryRun, Received: len(req.Contacts), Skipped: plan.Skipped, Details: plan.Details}
 	touchesLists := len(lists) > 0 && (len(plan.New) > 0 || (mode != ExistingSkip && len(plan.Existing) > 0))
 	updates := mode == ExistingUpdate && len(plan.Existing) > 0
+	// Mode attach (27/11/2026) : une fiche déjà en base (même adresse) reçoit ses champs encore vides, jamais plus. Compléter
+	// une fiche est une mise à jour : si une séquence active démarre sur contact.updated et que l'appel ne l'autorise pas,
+	// on n'écrit rien (attache seule, comme avant) plutôt que de refuser l'import.
+	var completions []Row
+	var completeStored map[string]Stored
+	if mode == ExistingAttach && len(plan.Existing) > 0 && !req.DryRun {
+		emails := make([]string, len(plan.Existing))
+		for i, r := range plan.Existing {
+			emails[i] = r.Email
+		}
+		if completeStored, err = s.Store.Existing(ctx, req.WorkspaceID, emails); err != nil {
+			return nil, err
+		}
+		for _, r := range plan.Existing {
+			if st, found := completeStored[r.Email]; found {
+				if m, ok := r.Missing(st); ok {
+					completions = append(completions, m)
+				}
+			}
+		}
+		if len(completions) > 0 && !req.AllowTriggers {
+			onUpdate, err := s.Store.LiveTriggers(ctx, req.WorkspaceID, nil, false, true)
+			if err != nil {
+				return nil, err
+			}
+			if len(onUpdate) > 0 {
+				s.Log.WithField("workspace_id", req.WorkspaceID).WithField("fiches", len(completions)).Warn("reservoir: fiches existantes non complétées, une séquence active démarre sur leur mise à jour")
+				completions = nil
+			}
+		}
+	}
 	if len(plan.New) > 0 || touchesLists || updates {
 		target := lists
 		if !touchesLists {
@@ -257,8 +288,15 @@ func (s *Service) Intake(ctx context.Context, req IntakeRequest) (*IntakeResult,
 			build(r, stored[r.Email])
 		}
 	case ExistingAttach:
+		completed := map[string]bool{}
+		for _, m := range completions {
+			build(m, completeStored[m.Email]) // écrite puis inscrite aux listes par la boucle d'écriture
+			completed[m.Email] = true
+		}
 		for _, r := range plan.Existing {
-			attach = append(attach, r.Email)
+			if !completed[r.Email] {
+				attach = append(attach, r.Email)
+			}
 		}
 		res.Existing = len(plan.Existing)
 	default:

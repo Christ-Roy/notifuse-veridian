@@ -126,15 +126,20 @@ func scan(ctx context.Context, db querier, each func([]string), cols int, q stri
 type Stored struct {
 	JSON1   json.RawMessage
 	Created time.Time
+	// Filled : les colonnes de la fiche qui portent déjà une valeur (ni NULL ni chaîne vide). Un import en mode attach ne
+	// complète que les autres (27/11/2026 : le téléphone envoyé par Prospection n'arrivait jamais sur une fiche existante).
+	Filled map[string]bool
 }
 
-// Existing lit custom_json_1 et la date de création des fiches à compléter.
+// Existing lit custom_json_1, la date de création et les colonnes déjà remplies des fiches à compléter.
 func (s *Store) Existing(ctx context.Context, ws string, emails []string) (map[string]Stored, error) {
 	db, err := s.WS.GetConnection(ctx, ws)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := db.QueryContext(ctx, `SELECT email, COALESCE(custom_json_1::text, ''), created_at FROM contacts WHERE email = ANY($1)`, pq.Array(emails))
+	rows, err := db.QueryContext(ctx, `SELECT c.email, COALESCE(c.custom_json_1::text, ''), c.created_at,
+		ARRAY(SELECT key FROM jsonb_each(to_jsonb(c)) WHERE jsonb_typeof(value) <> 'null' AND value <> '""'::jsonb)
+		FROM contacts c WHERE c.email = ANY($1)`, pq.Array(emails))
 	if err != nil {
 		return nil, err
 	}
@@ -142,11 +147,16 @@ func (s *Store) Existing(ctx context.Context, ws string, emails []string) (map[s
 	out := map[string]Stored{}
 	for rows.Next() {
 		var e, j string
+		var filled []string
 		var st Stored
-		if err := rows.Scan(&e, &j, &st.Created); err != nil {
+		if err := rows.Scan(&e, &j, &st.Created, pq.Array(&filled)); err != nil {
 			return nil, err
 		}
 		st.JSON1 = json.RawMessage(j)
+		st.Filled = make(map[string]bool, len(filled))
+		for _, k := range filled {
+			st.Filled[k] = true
+		}
 		out[e] = st
 	}
 	return out, rows.Err()

@@ -20,7 +20,9 @@ Origine (`app`, `jti`, `hub_user_id`) gardée dans `veridian_action_done` et au 
 ## Les actions (apps `app:prospection`, `app:crm` ; portée `notifuse:contacts.ecrire` du registre du Hub, sauf mention)
 Réponse : `{action, rejoue, simulation, resultat}`. Aucun champ inconnu n'est accepté, l'espace vient du jeton, **aucune action n'envoie**.
 - `contacts.importer` `{list_ids, contacts (1 à 1000), dry_run}` : passe par `contacts.intake` (fiche 85) avec `allow_triggers=false` et
-  `existing=attach` : fiche existante intacte, désinscrits, rebonds et plaintes exclus, `custom_json_1.veridian_source` = l'app du jeton. Tout
+  `existing=attach` : fiche existante (même adresse) complétée sur ses seuls champs vides, téléphone, site, tout champ simple ou clé de
+  `custom_json_1` absente, jamais une valeur présente écrasée (`updated` = fiches complétées ; 27/11/2026, le téléphone de Prospection
+  n'atteignait pas une fiche déjà là). Si une séquence active démarre sur `contact.updated`, rien n'est complété (attache seule) ; désinscrits, rebonds et plaintes exclus, `custom_json_1.veridian_source` = l'app du jeton. Tout
   champ inconnu d'un contact va dans `custom_json_1`. `resultat` : `dry_run, received, created, updated, existing, subscribed, skipped {motif: n}, details,
   triggers`. Une liste qui démarre une séquence : 409 `refus_de_l_app`, `detail.code = would_trigger`, rien d'écrit (en simulation : 200 et `triggers`).
 - `listes.lister` `{}` : `resultat.lists [{id, name, starts_sequence}]` (200 au plus). Lecture, sans `Idempotency-Key`.

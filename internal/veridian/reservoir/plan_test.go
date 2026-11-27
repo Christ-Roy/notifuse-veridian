@@ -132,3 +132,14 @@ func TestParseDedupe(t *testing.T) {
 	_, err = ParseDedupe([]string{"nom"})
 	assert.ErrorIs(t, err, ErrInvalid)
 }
+
+func TestRow_Missing(t *testing.T) {
+	r := Row{Email: "a@lieu.test", Fields: map[string]json.RawMessage{"phone": json.RawMessage(`"+34 600"`), "first_name": json.RawMessage(`"Ana"`)},
+		Extra: map[string]json.RawMessage{"site": json.RawMessage(`"lieu.test"`), "siren": json.RawMessage(`"1"`)}}
+	m, ok := r.Missing(Stored{Filled: map[string]bool{"first_name": true}, JSON1: json.RawMessage(`{"site":"ancien.test"}`)})
+	assert.True(t, ok)
+	assert.Equal(t, map[string]json.RawMessage{"phone": json.RawMessage(`"+34 600"`)}, m.Fields, "le prénom présent n'est pas réécrit")
+	assert.Equal(t, map[string]json.RawMessage{"siren": json.RawMessage(`"1"`)}, m.Extra, "le site présent n'est pas réécrit")
+	_, ok = r.Missing(Stored{Filled: map[string]bool{"first_name": true, "phone": true}, JSON1: json.RawMessage(`{"site":"x","siren":"1"}`)})
+	assert.False(t, ok, "tout est déjà rempli : rien à écrire")
+}
