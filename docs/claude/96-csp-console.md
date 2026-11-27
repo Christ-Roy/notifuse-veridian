@@ -32,3 +32,10 @@ SPA statiques (Vite) : `script-src 'self'` sans `'unsafe-inline'` ni nonce.
   (favicon de l'auto-login, `img-src` ajouté depuis). `csp-parcours.mjs` : `NAVIGATEUR=firefox`, `ATTENTE_RAPPORTS=<s>`.
 - **Enforce le 26/11/2026 (2e passage)** : nonce de l'auto-login en prod, parcours Chrome vert connexion comprise
   (12 étapes, 0 violation, Monaco chargé), journal relu sur 24 h (seuls une sonde et le favicon).
+- **Sans jsdelivr en prod (27/11/2026, c4163c5a, VER-265)** : servi `script-src 'self'` seul ; `/console/monaco/vs/loader.js`
+  200 depuis la console. `scripts/e2e/csp-parcours-prod.py robertbrunon` (lien SSO à usage unique, `lourd --navigateur`,
+  lecture seule, `EXIGER_MONACO=1`) : connexion par le Hub, 11 pages, éditeur MJML ouvert par « Créer un modèle » en mode
+  Code puis Annuler (34 gabarits relus inchangés), Monaco chargé par 16 requêtes locales et 0 vers un CDN, 0 violation,
+  `onerror` injecté bloqué et rapporté. Les gabarits de l'espace Veridian sont tous en texte brut : sans la voie
+  « Code (MJML) », le parcours n'ouvrait aucun Monaco et ne prouvait rien (vu le même jour, code 1 sous `EXIGER_MONACO=1`).
+

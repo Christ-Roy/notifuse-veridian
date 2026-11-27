@@ -68,10 +68,13 @@ for (const p of PAGES) {
   if (['dashboard', 'templates', 'inbox'].includes(p)) await shot(p)
 }
 // Éditeur de modèle : Monaco, servi par la console depuis /console/monaco/vs depuis VER-265 (27/11), plus par jsdelivr.
-await page.goto(`${base}/console/workspace/${WS}/templates`, { timeout: 90000 })
-await page.waitForTimeout(3000)
-const ligne = page.locator('table tbody tr').first()
-if (await ligne.count()) {
+// 27/11 : un gabarit en texte brut n'a pas de Monaco (zone de saisie simple). On essaie les premiers gabarits, chacun
+// refermé par « Annuler » (rien n'est enregistré), jusqu'à ce qu'un éditeur Monaco soit monté.
+for (let i = 0; i < 6 && !res.monaco; i++) {
+  await page.goto(`${base}/console/workspace/${WS}/templates`, { timeout: 90000 })
+  await page.waitForTimeout(3000)
+  const ligne = page.locator('table tbody tr').nth(i)
+  if (!(await ligne.count())) break
   await ligne.locator('button, a').first().click({ timeout: 10000 }).catch(() => ligne.click().catch(() => {}))
   await page.waitForTimeout(6000)
   // Étape 2 (le constructeur), puis l'aperçu et son onglet MJML : c'est là que Monaco se charge.
@@ -90,9 +93,33 @@ if (await ligne.count()) {
   await page.waitForTimeout(10000)
   res.monaco = (await page.locator('.monaco-editor').count()) > 0
   const v = await violations()
-  res.pages.push({ page: 'editeur-modele', violations: v.length, monaco: res.monaco })
-  res.violations.push(...v.map((x) => ({ page: 'editeur-modele', ...x })))
+  res.pages.push({ page: `editeur-modele-${i + 1}`, violations: v.length, monaco: res.monaco })
+  res.violations.push(...v.map((x) => ({ page: `editeur-modele-${i + 1}`, ...x })))
+  if (res.monaco) await shot('editeur-modele')
+  await page.keyboard.press('Escape').catch(() => {})
+  await page.getByRole('button', { name: /^(Cancel|Annuler)$/ }).first().click({ timeout: 3000 }).catch(() => {})
+}
+// Aucun gabarit existant n'a monté Monaco (tous en texte brut, cas de l'espace Veridian le 27/11) : nouveau gabarit en
+// mode « Code (MJML) », étape 2 (l'éditeur MJML est un Monaco), puis « Annuler ». Rien n'est enregistré.
+if (!res.monaco) {
+  await page.goto(`${base}/console/workspace/${WS}/templates`, { timeout: 90000 })
+  await page.waitForTimeout(3000)
+  await page.getByRole('button', { name: /^(Create Template|Créer un modèle)$/ }).first().click({ timeout: 10000 }).catch(() => {})
+  await page.waitForTimeout(3000)
+  await page.getByLabel(/^(Template name|Nom du modèle)$/).first().fill('csp-parcours-sans-enregistrement').catch(() => {})
+  await page.getByLabel(/^(Email subject|Objet de l'email)/).first().fill('CSP parcours').catch(() => {})
+  await page.getByText(/^Code \(MJML\)$/).first().click({ timeout: 5000 }).catch(() => {})
+  await page.getByRole('button', { name: /^(Next|Suivant)$/ }).first().click({ timeout: 5000 }).catch(() => {})
+  await page.waitForTimeout(12000)
+  res.monaco = (await page.locator('.monaco-editor').count()) > 0
+  const v = await violations()
+  res.pages.push({ page: 'nouveau-modele-mjml', violations: v.length, monaco: res.monaco })
+  res.violations.push(...v.map((x) => ({ page: 'nouveau-modele-mjml', ...x })))
   await shot('editeur-modele')
+  await page.getByRole('button', { name: /^(Cancel|Annuler)$/ }).first().click({ timeout: 3000 }).catch(() => {})
+  await page.waitForTimeout(1500)
+  // Une confirmation de fermeture sans enregistrer peut s'ouvrir : on la valide, toujours sans enregistrer.
+  await page.getByRole('button', { name: /^(OK|Oui|Yes|Discard|Abandonner|Quitter)$/ }).first().click({ timeout: 2000 }).catch(() => {})
 }
 // Contrôle positif : un onerror injecté doit être rapporté (Report-Only) ou bloqué (enforce).
 await page.goto(`${base}/console/workspace/${WS}/dashboard`, { timeout: 90000 })
@@ -112,6 +139,7 @@ const inattendues = res.violations.filter((x) => x.d !== 'script-src-attr')
 res.envois_rapports = envois.slice(0, 20)
 res.monaco_source = monacoSource
 console.log('RESULTAT ' + JSON.stringify(res))
-const monacoLocal = monacoSource.cdn === 0 && (!res.monaco || monacoSource.local > 0)
+// EXIGER_MONACO=1 (preuve VER-265) : un parcours qui n'a pas ouvert Monaco n'a rien prouvé sur sa provenance.
+const monacoLocal = monacoSource.cdn === 0 && (!res.monaco || monacoSource.local > 0) && (process.env.EXIGER_MONACO !== '1' || res.monaco)
 const ok = res.controle.rapporte > 0 && (header !== 'enforce' || !res.controle.execute) && inattendues.length === 0 && monacoLocal
 process.exit(ok ? 0 : 1)
