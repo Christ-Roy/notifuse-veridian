@@ -6,7 +6,7 @@ tests/e2e-veridian/csp-parcours.mjs par `lourd --navigateur` (le lien passe en m
 console, l'éditeur de gabarits (Monaco), d'où vient Monaco, et le contrôle positif (un onerror injecté doit rester bloqué).
 Lecture seule : aucune donnée n'est modifiée.
 
-Usage : csp-parcours-prod.py <espace> [--sortie <dossier des captures>] [--firefox]
+Usage : csp-parcours-prod.py <espace> [--sortie <dossier des captures>] [--firefox] [--parcours captures-console.mjs --env LARGEUR=390]
 Sortie : la ligne RESULTAT du parcours ; 0 = vert, 1 = violation ou contrôle positif muet ou Monaco venu d'un CDN, 2 = non abouti."""
 import argparse, base64, os, subprocess, sys, urllib.parse
 
@@ -14,7 +14,13 @@ ap = argparse.ArgumentParser()
 ap.add_argument("ws")
 ap.add_argument("--sortie", default=".")
 ap.add_argument("--firefox", action="store_true")
+ap.add_argument("--parcours", default="csp-parcours.mjs", help="autre parcours de tests/e2e-veridian (ex. captures-console.mjs), même connexion")
+ap.add_argument("--env", action="append", default=[], help="variable passée au parcours, CLE=valeur (ex. LARGEUR=390)")
 a = ap.parse_args()
+import re  # noqa: E402
+if not re.fullmatch(r"[a-z0-9-]+\.mjs", a.parcours) or not re.fullmatch(r"[a-z0-9]{1,40}", a.ws):
+    print("NON ABOUTI : parcours (nom de fichier .mjs) ou espace invalide")
+    sys.exit(2)
 sys.path.insert(0, os.path.expanduser("~/.claude/skills/notifuse-cli/bin"))
 import notifuse_common as nc  # noqa: E402
 
@@ -32,16 +38,17 @@ if st != 200 or not link:
     sys.exit(2)
 racine = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 nav = "NAVIGATEUR=firefox " if a.firefox else ""
+extra = "".join(f"{e} " for e in a.env if e.split("=", 1)[0].isidentifier() and "'" not in e and " " not in e)
 # Playwright 1.60.0 : la version des navigateurs de l'image lourd --navigateur (/ms-playwright).
 cmd = ["lourd", "--navigateur", "--secrets", "LIEN", "sh", "-c",
-       f"npm i --no-audit --no-fund @playwright/test@1.60.0 >/dev/null 2>&1 && PLAYWRIGHT_BROWSERS_PATH=/ms-playwright EXIGER_MONACO=1 {nav}node csp-parcours.mjs {a.ws}"]
+       f"npm i --no-audit --no-fund @playwright/test@1.60.0 >/dev/null 2>&1 && PLAYWRIGHT_BROWSERS_PATH=/ms-playwright EXIGER_MONACO=1 {nav}{extra}node {a.parcours} {a.ws}"]
 pr = subprocess.run(cmd, env=dict(os.environ, LIEN=link), capture_output=True, text=True, timeout=1800,
                     cwd=os.path.join(racine, "tests", "e2e-veridian"))
 os.makedirs(a.sortie, exist_ok=True)
 for line in pr.stdout.splitlines():
     if line.startswith("CAPTURE "):
         _, nom, b64 = line.split(" ", 2)
-        open(os.path.join(a.sortie, f"csp_{nom}.jpg"), "wb").write(base64.b64decode(b64))
+        open(os.path.join(a.sortie, f"{os.path.splitext(a.parcours)[0]}_{nom}.jpg"), "wb").write(base64.b64decode(b64))
     elif line.startswith("RESULTAT") or "NON ABOUTI" in line:
         print(line)
 print("code", pr.returncode)

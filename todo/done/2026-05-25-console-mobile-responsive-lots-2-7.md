@@ -1,5 +1,7 @@
 # Console Veridian Mail — Version mobile utilisable
 
+> **CLOS le 27/11/2026, mesuré en prod (e8508baa) dans un vrai navigateur à 390 px** (`scripts/e2e/csp-parcours-prod.py robertbrunon --parcours captures-console.mjs --env LARGEUR=390`) : tableau de bord, boîte de réception, contacts, listes, modèles, séquences, profils d'envoi, réglages ; **0 px de débordement horizontal sur les 8 pages**, menu en tiroir, tuiles en grille, boîte de réception en cartes lisibles. Les lots 2 à 7 ont été couverts depuis (tiroirs et mobile 0727bce5, refonte responsive e139296f, mesures d'accessibilité). Reste un défaut mineur : sur Contacts, la rangée des segments est coupée à droite (pas de défilement de page) ; à reprendre avec la page Contacts, pas un lot à part.
+
 > **Sévérité** : 🟡 P1 — la console est actuellement quasi-inutilisable sur mobile/tablette
 > **Owner** : agent Notifuse (front)
 > **Créé** : 2026-05-24 (audit responsive post-session N)
