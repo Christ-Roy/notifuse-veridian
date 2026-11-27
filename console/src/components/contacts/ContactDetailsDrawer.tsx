@@ -794,25 +794,6 @@ export function ContactDetailsDrawer({
                 </div>
               ))}
 
-              {/* Unset standard fields */}
-              {editableFields
-                .filter((field) => !field.key.startsWith('custom_') && (field.value === null || field.value === undefined || field.value === ''))
-                .map((field) => (
-                <InlineEditableField
-                  key={field.key}
-                  fieldKey={field.key}
-                  fieldType={getFieldType(field.key)}
-                  label={field.label}
-                  displayLabel={'displayLabel' in field ? field.displayLabel : undefined}
-                  showTooltip={'showTooltip' in field ? field.showTooltip : undefined}
-                  technicalName={'technicalName' in field ? field.technicalName : undefined}
-                  value={field.value}
-                  workspace={workspace}
-                  onSave={handleFieldUpdate}
-                  isLoading={isLoadingContact}
-                />
-              ))}
-
               {/* Unset custom fields in expandable sections (excluding labeled fields) */}
               {(() => {
                 const hasConfiguredLabel = (fieldKey: string) => !!workspace?.settings?.custom_field_labels?.[fieldKey]
@@ -838,6 +819,33 @@ export function ContactDetailsDrawer({
                 )
 
                 const collapseItems = []
+
+                // Veridian (27/11/2026) : les champs standard vides (prénom, téléphone, adresse...) étaient listés un par un en
+                // « Non défini », une quinzaine de lignes qui noyaient la fiche d'un prospect. Repliés ici, toujours modifiables.
+                const unsetStandard = editableFields.filter(
+                  (field) => !field.key.startsWith('custom_') && (field.value === null || field.value === undefined || field.value === '')
+                )
+                if (unsetStandard.length > 0) {
+                  collapseItems.push({
+                    key: 'unset_standard',
+                    label: <span className="text-xs text-gray-500" data-testid="unset-standard-fields">{t`Empty fields`} ({unsetStandard.length})</span>,
+                    children: unsetStandard.map((field) => (
+                      <InlineEditableField
+                        key={field.key}
+                        fieldKey={field.key}
+                        fieldType={getFieldType(field.key)}
+                        label={field.label}
+                        displayLabel={'displayLabel' in field ? field.displayLabel : undefined}
+                        showTooltip={'showTooltip' in field ? field.showTooltip : undefined}
+                        technicalName={'technicalName' in field ? field.technicalName : undefined}
+                        value={field.value}
+                        workspace={workspace}
+                        onSave={handleFieldUpdate}
+                        isLoading={isLoadingContact}
+                      />
+                    ))
+                  })
+                }
 
                 if (unsetCustomStrings.length > 0) {
                   collapseItems.push({

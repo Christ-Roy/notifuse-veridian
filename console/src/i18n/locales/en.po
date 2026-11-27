@@ -4792,6 +4792,10 @@ msgstr "Emails / sender / day"
 msgid "Empty column. Add text, button, or image content."
 msgstr "Empty column. Add text, button, or image content."
 
+#: src/components/contacts/ContactDetailsDrawer.tsx
+msgid "Empty fields"
+msgstr "Empty fields"
+
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx
 msgid "Empty line"
 msgstr "Empty line"

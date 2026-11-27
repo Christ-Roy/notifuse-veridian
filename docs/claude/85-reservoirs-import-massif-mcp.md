@@ -42,3 +42,9 @@ Migration V76 (lots nommés). Outils MCP : `internal/veridian/mcp/tools_reservoi
 En-tête `X-Veridian-MCP-Appel: programme` : réponse entière jusqu'à 1 Mo et `structuredContent` (au-delà, erreur franche, jamais un
 JSON coupé). Il n'ouvre aucun droit. Corps accepté par `/api/mcp` : 2 Mo. Sans lui : 30 000 caractères, et le Hub coupe à 16 000.
 `automations_list`, `segments_list` et `sending_quota` sont réduits (les réponses brutes de gbc dépassaient la coupe du Hub).
+
+## Noms des champs de prospection (27/11/2026)
+Un import qui porte la signature de l'export de prospection (custom_string_2 en P1 à P4 ET custom_string_5 en classe de messagerie
+connue, aucune valeur hors format) nomme les champs qu'il remplit : Activité, Priorité, Département, Entreprise, Messagerie, Score
+(`reservoir/labels.go`). Un libellé déjà choisi par l'espace gagne toujours, une seule instruction SQL (jamais un réglage écrasé).
+Mesuré en prod : d'autres espaces emploient ces champs autrement (ville, espèce d'animal), d'où la signature stricte.

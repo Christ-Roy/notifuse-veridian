@@ -23,7 +23,9 @@ type Service struct {
 	Contacts Contacts
 	// Workspaces : lit le profil transactionnel réservé de l'espace.
 	Workspaces WorkspaceReader
-	Log        logger.Logger
+	// Labels : nomme les champs de prospection que l'import remplit (labels.go). Nil : rien n'est nommé.
+	Labels Labeler
+	Log    logger.Logger
 
 	locks sync.Map // un import à la fois par espace : deux lots simultanés ne doivent pas se croire chacun le premier
 }
@@ -280,6 +282,12 @@ func (s *Service) Intake(ctx context.Context, req IntakeRequest) (*IntakeResult,
 			} else {
 				res.Updated++
 			}
+		}
+	}
+	if s.Labels != nil && res.Created+res.Updated > 0 {
+		// La fiche se lit avec des noms (Entreprise, Priorité, Score...) ; un échec ici n'annule pas un import déjà écrit.
+		if err := s.Labels.EnsureLabels(ctx, req.WorkspaceID, LabelsFor(write)); err != nil {
+			s.Log.WithField("workspace_id", req.WorkspaceID).WithField("error", err.Error()).Warn("reservoir: libellés des champs non posés")
 		}
 	}
 	if res.Subscribed, err = s.Store.Subscribe(ctx, req.WorkspaceID, attach, lists); err != nil {

@@ -4792,6 +4792,10 @@ msgstr ""
 msgid "Empty column. Add text, button, or image content."
 msgstr "Columna vacía. Añade contenido de texto, botón o imagen."
 
+#: src/components/contacts/ContactDetailsDrawer.tsx
+msgid "Empty fields"
+msgstr ""
+
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx
 msgid "Empty line"
 msgstr ""

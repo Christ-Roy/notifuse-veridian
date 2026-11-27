@@ -47,6 +47,26 @@ describe('Voir le contact depuis un message', () => {
     expect(screen.getAllByText(/info@lamasialescasotes\.com/).length).toBeGreaterThan(0)
   })
 
+  it('une fiche de prospect : champs nommés en tête, champs vides repliés', async () => {
+    vi.mocked(contactsApi.list).mockResolvedValue({
+      contacts: [{ email: 'contacto@lugar.test', custom_string_4: 'La Masia les Casotes', custom_number_1: 299, contact_lists: [] }]
+    } as never)
+    const labels = { custom_string_4: 'Entreprise', custom_number_1: 'Score' }
+    renderMail(
+      <AuthContext.Provider value={{ workspaces: [{ id: WS, name: 'Ilum Photos', settings: { custom_field_labels: labels } }] } as never}>
+        <MailContactButton workspaceId={WS} email="contacto@lugar.test" />
+      </AuthContext.Provider>
+    )
+    await user.click(screen.getByRole('button', { name: /View contact/ }))
+    expect(await screen.findByText('La Masia les Casotes')).toBeInTheDocument()
+    expect(screen.getByText('Entreprise')).toBeInTheDocument()
+    expect(screen.getByTestId('unset-standard-fields')).toHaveTextContent(/Empty fields \(\d+\)/)
+    // Le téléphone vide n'occupe plus une ligne « non défini » : il attend dans la section repliée.
+    expect(screen.queryByText('Phone')).toBeNull()
+    await user.click(screen.getByTestId('unset-standard-fields'))
+    expect(await screen.findByText('Phone')).toBeInTheDocument()
+  })
+
   it('aucun bouton sans contact rattaché ni hors session', () => {
     renderMail(withWorkspace(<MailContactButton workspaceId={WS} email="" />))
     renderMail(<MailContactButton workspaceId={WS} email="a@b.fr" />)
