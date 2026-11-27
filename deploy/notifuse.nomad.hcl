@@ -56,8 +56,9 @@ job "notifuse" {
 # veridian-contract:end
 
   group "stack" {
-    # Annonce des tags Traefik (règle 23, garde-tags-canari) : empreinte des tags du déploiement suivant (rejeu
-    # retry-idempotent@file, délai du healthcheck 2 s). Posée seule d'abord (déploiement destructif), les tags ensuite (en place).
+    # Marqueur d'annonce périmé depuis la garde du 27/11 20:04 (count >= 2 : jamais modifier une définition Traefik
+    # existante, on ajoute sous un nouveau nom puis on retire l'ancien). Laissé tel quel pour ne pas rendre ce
+    # déploiement destructif ; il part avec l'ancien bloc `notifuse`, au second temps.
     meta {
       veridian_tags_canari_annonce = "684fd0447f527a90"
     }
@@ -174,21 +175,59 @@ job "notifuse" {
         "traefik.enable=true",
         "traefik.http.routers.notifuse.rule=Host(`notifuse-lab.veridian.site`)",
         "traefik.http.routers.notifuse.entrypoints=web",
-        "traefik.http.routers.notifuse.middlewares=internal-only@nomad,retry-idempotent@file",
+        "traefik.http.routers.notifuse.middlewares=internal-only@nomad",
         "traefik.http.routers.notifusesec.rule=Host(`notifuse-lab.veridian.site`)",
         "traefik.http.routers.notifusesec.entrypoints=websecure",
-        "traefik.http.routers.notifusesec.middlewares=internal-only@nomad,retry-idempotent@file",
+        "traefik.http.routers.notifusesec.middlewares=internal-only@nomad",
         "traefik.http.routers.notifusesec.tls=true",
         "traefik.http.routers.notifuseprod.rule=Host(`notifuse.app.veridian.site`)",
         "traefik.http.routers.notifuseprod.entrypoints=websecure",
         "traefik.http.routers.notifuseprod.tls=true",
         "traefik.http.routers.notifuseprod.tls.certresolver=letsencrypt",
-        # Rejeu des GET/HEAD sur 502/503/504 (retry-idempotent@file, posé par l'infra sur les ingress), EN DERNIER de la chaîne.
-        "traefik.http.routers.notifuseprod.middlewares=retry-idempotent@file",
-        # Controle actif de Traefik : une instance qui ne repond plus sort du lot en 2 s, sans attendre le catalogue.
         "traefik.http.services.notifuse.loadbalancer.healthcheck.path=/healthz",
         "traefik.http.services.notifuse.loadbalancer.healthcheck.interval=2s",
-        "traefik.http.services.notifuse.loadbalancer.healthcheck.timeout=2s",
+        "traefik.http.services.notifuse.loadbalancer.healthcheck.timeout=1s",
+      ]
+      check {
+        type     = "http"
+        path     = "/healthz"
+        interval = "15s"
+        timeout  = "5s"
+      }
+    }
+
+    # VER-270, premier temps : les mêmes routes sous des noms NEUFS (garde-tags-canari, count >= 2), avec le rejeu
+    # retry-idempotent@file EN DERNIER de la chaîne et le contrôle actif de Traefik à 2 s. Priorité 1000 : dès qu'un
+    # exemplaire les porte, elles gagnent sur les anciennes (même règle, mêmes protections). Le service Traefik
+    # s'appelle `notifuseweb`, pas comme le bloc Nomad, pour ne pas toucher au service implicite de ce nom.
+    # Second temps : retirer le bloc `notifuse` ci-dessus.
+    service {
+      name     = "notifuse-web"
+      provider = "nomad"
+      port     = "http"
+      tags = [
+        "traefik.enable=true",
+        "traefik.http.routers.notifuseweb.rule=Host(`notifuse-lab.veridian.site`)",
+        "traefik.http.routers.notifuseweb.entrypoints=web",
+        "traefik.http.routers.notifuseweb.priority=1000",
+        "traefik.http.routers.notifuseweb.service=notifuseweb",
+        "traefik.http.routers.notifuseweb.middlewares=internal-only@nomad,retry-idempotent@file",
+        "traefik.http.routers.notifusewebsec.rule=Host(`notifuse-lab.veridian.site`)",
+        "traefik.http.routers.notifusewebsec.entrypoints=websecure",
+        "traefik.http.routers.notifusewebsec.priority=1000",
+        "traefik.http.routers.notifusewebsec.service=notifuseweb",
+        "traefik.http.routers.notifusewebsec.middlewares=internal-only@nomad,retry-idempotent@file",
+        "traefik.http.routers.notifusewebsec.tls=true",
+        "traefik.http.routers.notifusewebprod.rule=Host(`notifuse.app.veridian.site`)",
+        "traefik.http.routers.notifusewebprod.entrypoints=websecure",
+        "traefik.http.routers.notifusewebprod.priority=1000",
+        "traefik.http.routers.notifusewebprod.service=notifuseweb",
+        "traefik.http.routers.notifusewebprod.tls=true",
+        "traefik.http.routers.notifusewebprod.tls.certresolver=letsencrypt",
+        "traefik.http.routers.notifusewebprod.middlewares=retry-idempotent@file",
+        "traefik.http.services.notifuseweb.loadbalancer.healthcheck.path=/healthz",
+        "traefik.http.services.notifuseweb.loadbalancer.healthcheck.interval=2s",
+        "traefik.http.services.notifuseweb.loadbalancer.healthcheck.timeout=2s",
       ]
       check {
         type     = "http"
