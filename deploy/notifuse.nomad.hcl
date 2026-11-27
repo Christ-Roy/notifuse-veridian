@@ -56,6 +56,12 @@ job "notifuse" {
 # veridian-contract:end
 
   group "stack" {
+    # Annonce des tags Traefik (règle 23, garde-tags-canari) : empreinte des tags du déploiement suivant (rejeu
+    # retry-idempotent@file, délai du healthcheck 2 s). Posée seule d'abord (déploiement destructif), les tags ensuite (en place).
+    meta {
+      veridian_tags_canari_annonce = "684fd0447f527a90"
+    }
+
     count = 2
 
     # Placement par étiquette, jamais par machine (cible d'infra du 27/11) : les nœuds `app` (ovh-prod zone ovh,
