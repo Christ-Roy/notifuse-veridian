@@ -38,3 +38,8 @@ bouge, par `scripts/ci/lourd-ou-local.sh` : `lourd-si-bastion` sur le bastion (r
 Si lourd n'a rien fait tourner (NON ABOUTI), l'étape est relancée ici en `nice -n 19` : un « non abouti » ne laisse jamais
 passer. i18n reste local (il réécrit les `.po` à commiter). Prouvé : un test cassé exprès dans `mxgate` fait refuser le push
 (FAIL lu sur rise), le vert passe. Les suites complètes à la main : `lourd --go go test ./...`, jamais en direct sur le bastion.
+
+Depuis le 27/11 : `scripts/ci/prepush-console-tests.sh` joue par lourd (`npm ci` puis `vitest run`) les tests console du push et
+ceux qui importent un fichier `console/src` modifié (choix par `grep` des imports ; `vitest related` bute sur les `.po` faute du
+plugin Lingui dans `vitest.config.ts`). Prouvé : `installLinksLang` cassé exprès dans la source fait rouge (`&lang=en` attendu),
+la source saine passe (9 tests, ~30 s avec `npm ci`). Un fichier sans test lié passe ici : le mapping source↔test en juge.

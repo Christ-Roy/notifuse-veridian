@@ -22,6 +22,8 @@ if ! git diff --quiet "@{upstream}" -- tests/e2e-veridian 2>/dev/null; then
 fi
 # Tests Go des paquets que le push modifie (vet + test), image Go de lourd. Aucun avant le 26/11 : vus en CI seulement.
 scripts/ci/prepush-go-tests.sh || { echo "pre-push : tests Go ROUGES, push refusé" >&2; exit 1; }
+# Tests vitest de la console liés aux fichiers console/src du push (27/11 : vus en CI seulement avant), par lourd.
+scripts/ci/prepush-console-tests.sh || { echo "pre-push : tests console ROUGES, push refusé" >&2; exit 1; }
 # Mapping source↔test (Constitution CI §1) : la CI le refuse sinon, 20 à 30 min plus tard (deux fois le
 # 23/11). Choix de ce dépôt (gardes ne joue pas son palier rapide au push, décision du 03/10). ~1 s.
 BASE_REF="$(git rev-parse '@{upstream}' 2>/dev/null || echo origin/veridian)" scripts/ci/check-test-mapping.sh >/tmp/notifuse-mapping-prepush.log 2>&1 || {
