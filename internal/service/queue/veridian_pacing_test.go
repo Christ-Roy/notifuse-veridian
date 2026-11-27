@@ -34,6 +34,11 @@ func pacingFixture(planner PacingPlanner) (*veridianPacer, *time.Time) {
 	return p, &clock
 }
 
+func take(p *veridianPacer, ws *domain.Workspace, prov *domain.EmailProvider, e *domain.EmailQueueEntry, id string) bool {
+	ok, _ := p.take(ws, prov, e, id)
+	return ok
+}
+
 func pacingCommercialEntry() *domain.EmailQueueEntry {
 	e := veridianTestEntry("e1", "lead@ovh.fr", domain.EmailQueuePayload{})
 	e.SourceType = domain.EmailQueueSourceBroadcast // une campagne (une séquence interrogerait son ancrage)
@@ -58,7 +63,7 @@ func TestVeridianPacer_SpreadsCommercialSendsOverTheWindow(t *testing.T) {
 
 	v := p.verdict(ws, prov, entry, "nord")
 	assert.False(t, v.Blocked(), "premier envoi du processus : il part")
-	require.True(t, p.take(ws, prov, entry, "nord"))
+	require.True(t, take(p, ws, prov, entry, "nord"))
 
 	// 30 s après : 9 restants sur 109,5 min -> 10,95 min d'écart, dont 30 s déjà passées.
 	*clock = clock.Add(30 * time.Second)
@@ -68,11 +73,11 @@ func TestVeridianPacer_SpreadsCommercialSendsOverTheWindow(t *testing.T) {
 	assert.Equal(t, domain.VeridianGatePacing, v.Gate)
 	assert.InDelta(t, 109.5/10*60-30, v.Delay.Seconds(), 1)
 	assert.Equal(t, 1, planner.calls, "le plan est relu au plus toutes les 2 min, pas à chaque examen")
-	assert.False(t, p.take(ws, prov, entry, "nord"), "un créneau occupé ne se réserve pas")
+	assert.False(t, take(p, ws, prov, entry, "nord"), "un créneau occupé ne se réserve pas")
 
 	*clock = clock.Add(11 * time.Minute)
 	assert.False(t, p.verdict(ws, prov, entry, "nord").Blocked(), "le créneau est passé")
-	assert.True(t, p.take(ws, prov, entry, "nord"))
+	assert.True(t, take(p, ws, prov, entry, "nord"))
 	assert.Equal(t, 2, planner.calls, "plan relu une fois passées les 2 min")
 }
 
@@ -83,7 +88,7 @@ func TestVeridianPacer_DispersionKeepsTheDrawnFactorUntilNextSend(t *testing.T) 
 	ws := &domain.Workspace{ID: "ws-1"}
 	prov := &domain.EmailProvider{VeridianSendingWindow: pacingWindowAllDay()}
 	entry := pacingCommercialEntry()
-	require.True(t, p.take(ws, prov, entry, "nord"))
+	require.True(t, take(p, ws, prov, entry, "nord"))
 	clock = clock.Add(8 * time.Minute) // 11 min x 0,7 = 7 min 42 s
 	assert.False(t, p.verdict(ws, prov, entry, "nord").Blocked(), "dispersion -30 % : le créneau s'ouvre plus tôt")
 }
@@ -97,32 +102,32 @@ func TestVeridianPacer_LetsThroughWhatItDoesNotGovern(t *testing.T) {
 		p, _ := pacingFixture(planner)
 		e := veridianTestEntry("e1", "client@ovh.fr", domain.EmailQueuePayload{})
 		e.SourceType = domain.EmailQueueSourceMail
-		require.True(t, p.take(ws, windowed, e, "nord"))
+		require.True(t, take(p, ws, windowed, e, "nord"))
 		assert.False(t, p.verdict(ws, windowed, e, "nord").Blocked())
 	})
 	t.Run("profil sans fenêtre", func(t *testing.T) {
 		p, _ := pacingFixture(planner)
 		e := pacingCommercialEntry()
-		require.True(t, p.take(ws, &domain.EmailProvider{}, e, "nord"))
+		require.True(t, take(p, ws, &domain.EmailProvider{}, e, "nord"))
 		assert.False(t, p.verdict(ws, &domain.EmailProvider{}, e, "nord").Blocked())
 	})
 	t.Run("plan illisible", func(t *testing.T) {
 		p, _ := pacingFixture(&fakePacingPlanner{err: errors.New("base injoignable")})
 		e := pacingCommercialEntry()
-		require.True(t, p.take(ws, windowed, e, "nord"))
+		require.True(t, take(p, ws, windowed, e, "nord"))
 		assert.False(t, p.verdict(ws, windowed, e, "nord").Blocked(), "une mesure absente ne bloque jamais l'envoi")
 	})
 	t.Run("capacité illimitée", func(t *testing.T) {
 		p, _ := pacingFixture(&fakePacingPlanner{plan: map[string]VeridianPaceInput{"nord": {Known: false, MinutesLeft: 110}}})
 		e := pacingCommercialEntry()
-		require.True(t, p.take(ws, windowed, e, "nord"))
+		require.True(t, take(p, ws, windowed, e, "nord"))
 		assert.False(t, p.verdict(ws, windowed, e, "nord").Blocked())
 	})
 	t.Run("coupe-circuit", func(t *testing.T) {
 		t.Setenv("VERIDIAN_PACING", "off")
 		p, _ := pacingFixture(planner)
 		e := pacingCommercialEntry()
-		require.True(t, p.take(ws, windowed, e, "nord"))
+		require.True(t, take(p, ws, windowed, e, "nord"))
 		assert.Equal(t, domain.VeridianVerdictSkipped, p.verdict(ws, windowed, e, "nord").Verdict)
 	})
 }
@@ -164,4 +169,34 @@ func TestVeridianSelectSendable_PacingSpreadsAcrossThePool(t *testing.T) {
 	// 9 restants sur 110 min = 11 min, dispersé de ±30 % : entre 7 min 42 s et 14 min 18 s.
 	assert.GreaterOrEqual(t, s3.RetryDelay, time.Duration(0.7*float64(11*time.Minute))-time.Second)
 	assert.LessOrEqual(t, s3.RetryDelay, time.Duration(1.3*float64(11*time.Minute)))
+}
+
+// 27/11, mesuré en prod : une entrée retenue puis refusée plus loin (réservation atomique du quota, pré-filtre, garde
+// finale, refus avant acceptation) consommait un créneau de 4 min sans rien envoyer ; greenbeamcraft n'envoyait plus.
+// Le créneau est rendu, sauf si un envoi suivant l'a déjà pris.
+func TestVeridianPacer_UndoGivesTheSlotBack(t *testing.T) {
+	planner := &fakePacingPlanner{plan: map[string]VeridianPaceInput{"nord": {Remaining: 10, Known: true, MinutesLeft: 110}}}
+	p, clock := pacingFixture(planner)
+	ws := &domain.Workspace{ID: "ws-1"}
+	prov := &domain.EmailProvider{VeridianSendingWindow: pacingWindowAllDay()}
+	entry := pacingCommercialEntry()
+
+	ok, first := p.take(ws, prov, entry, "nord")
+	require.True(t, ok)
+	require.NotNil(t, first)
+	*clock = clock.Add(12 * time.Minute)
+	ok, undo := p.take(ws, prov, entry, "nord")
+	require.True(t, ok)
+	*clock = clock.Add(time.Second)
+	require.True(t, p.verdict(ws, prov, entry, "nord").Blocked(), "créneau pris")
+
+	before := p.sincePlan[veridianPacingKey("ws-1", "nord")]
+	undo() // l'entrée n'est pas partie
+	assert.False(t, p.verdict(ws, prov, entry, "nord").Blocked(), "créneau rendu : le premier envoi date de 12 min")
+	assert.Equal(t, before-1, p.sincePlan[veridianPacingKey("ws-1", "nord")], "l'envoi annulé ne compte plus")
+
+	ok, _ = p.take(ws, prov, entry, "nord")
+	require.True(t, ok)
+	first() // trop tard : un envoi suivant a pris le créneau depuis
+	assert.True(t, p.verdict(ws, prov, entry, "nord").Blocked(), "une annulation périmée ne libère rien")
 }

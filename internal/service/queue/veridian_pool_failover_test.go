@@ -1051,3 +1051,35 @@ func TestEmailQueueWorker_ProcessEntry_RelanceDeSequenceOuverte_ExclusionPoseeAp
 	require.NotNil(t, trace.StatusInfo)
 	assert.Contains(t, *trace.StatusInfo, "excluded_provider_class:free")
 }
+
+// 27/11 : la sélection porte l'annulation du créneau d'étalement du candidat retenu. Rendu (l'entrée n'est pas partie),
+// le même profil reprend la main pour l'entrée suivante au lieu de passer à relai ou d'attendre 4 min.
+func TestVeridianSelectSendable_PacingSlotGivenBackWhenEntryDoesNotLeave(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	nord := veridianTestPoolIntegration("nord", "hello@nord-propre.example")
+	relai := veridianTestPoolIntegration("relai", "hello@relai-agence.example")
+	nord.EmailProvider.VeridianSendingWindow = pacingWindowAllDay()
+	relai.EmailProvider.VeridianSendingWindow = pacingWindowAllDay()
+	ws := veridianTestPoolWorkspace([]string{"nord", "relai"}, []domain.Integration{nord, relai}, nil)
+	veridianExpectHealthyReputation(env, "ws-1", "nord-propre.example")
+	veridianExpectHealthyReputation(env, "ws-1", "relai-agence.example")
+	SetVeridianPacingPlanner(&fakePacingPlanner{plan: map[string]VeridianPaceInput{
+		"nord": {Remaining: 10, Known: true, MinutesLeft: 110}, "relai": {Remaining: 10, Known: true, MinutesLeft: 110},
+	}})
+	t.Cleanup(func() { SetVeridianPacingPlanner(nil) })
+	pick := func(id string) veridianSelectionResult {
+		e := pacingCommercialEntry()
+		e.ID, e.IntegrationID, e.Payload.FromAddress = id, "nord", "hello@nord-propre.example"
+		return env.worker.veridianSelectSendableIntegration(ws, e, ws.GetIntegrationByID("nord"))
+	}
+
+	first := pick("e1")
+	require.NotNil(t, first.Candidate)
+	require.Equal(t, "nord", first.Candidate.IntegrationID)
+	require.NotNil(t, first.pacingUndo, "le créneau réservé est rendu possible")
+	first.veridianReleasePacing() // e1 tombe sur quota_denied : rien n'est parti
+
+	second := pick("e2")
+	require.NotNil(t, second.Candidate)
+	assert.Equal(t, "nord", second.Candidate.IntegrationID, "créneau rendu : nord envoie e2 tout de suite")
+}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/domain/mocks"
+	"github.com/Notifuse/notifuse/pkg/emailerror"
 	pkgmocks "github.com/Notifuse/notifuse/pkg/mocks"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -226,4 +227,34 @@ func TestVeridianSendPipeline_Record_FailureWithoutLeasesIsHarmless(t *testing.T
 	sc := &SendContext{Workspace: &domain.Workspace{ID: "workspace-1"}, Entry: &domain.EmailQueueEntry{ID: "entry-1"}}
 	assert.NotPanics(t, func() { p.Record(sc, SendResult{Err: errors.New("421 timeout apres DATA")}) })
 	assert.NotPanics(t, func() { p.Record(sc, SendResult{}) }, "succes sans journal de decision : rien a ecrire")
+}
+
+// Dans le pipeline : la garde finale refuse (ici la prise de la ligne échoue) ou le relais refuse avant acceptation,
+// le créneau est rendu ; un refus APRÈS acceptation (ambigu) le garde, comme le quota.
+func TestVeridianSendPipeline_ReleasesPacingWhenNothingLeaves(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	p := &veridianSendPipeline{w: env.worker}
+	ws := &domain.Workspace{ID: "ws-1"}
+	newSC := func(released *int) *SendContext {
+		e := veridianTestEntry("e1", "client@ovh.fr", domain.EmailQueuePayload{})
+		e.SourceType = domain.EmailQueueSourceMail
+		sc := &SendContext{Workspace: ws, Entry: e, Integration: &domain.Integration{ID: "nord"}, Claim: func() bool { return false }}
+		sc.selection.pacingUndo = func() { *released++ }
+		return sc
+	}
+
+	released := 0
+	assert.False(t, p.PreSend(newSC(&released)))
+	assert.Equal(t, 1, released, "rien n'est parti à PreSend : créneau rendu")
+
+	released = 0
+	sc := newSC(&released)
+	p.Record(sc, SendResult{Err: emailerror.BeforeAcceptance(errors.New("connection refused"))})
+	assert.Equal(t, 1, released, "refus avant acceptation : créneau rendu")
+	p.Record(sc, SendResult{Err: emailerror.BeforeAcceptance(errors.New("again"))})
+	assert.Equal(t, 1, released, "rendu une seule fois")
+
+	released = 0
+	p.Record(newSC(&released), SendResult{Err: errors.New("timeout after DATA")})
+	assert.Equal(t, 0, released, "issue ambiguë après DATA : le créneau reste consommé")
 }

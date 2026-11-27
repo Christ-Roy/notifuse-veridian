@@ -197,6 +197,15 @@ func (p *veridianSendPipeline) Select(sc *SendContext) bool {
 
 // PreRender : voir SendPipeline.
 func (p *veridianSendPipeline) PreRender(sc *SendContext) bool {
+	// 27/11 : l'entrée retenue ne part pas à cette étape : son créneau d'étalement est rendu (veridian_pacing.go).
+	if !p.preRender(sc) {
+		sc.selection.veridianReleasePacing()
+		return false
+	}
+	return true
+}
+
+func (p *veridianSendPipeline) preRender(sc *SendContext) bool {
 	w, workspace, entry := p.w, sc.Workspace, sc.Entry
 	integration := sc.Integration
 
@@ -262,6 +271,15 @@ func (p *veridianSendPipeline) PreRender(sc *SendContext) bool {
 
 // PreSend : voir SendPipeline.
 func (p *veridianSendPipeline) PreSend(sc *SendContext) bool {
+	// 27/11 : l'entrée retenue ne part pas à cette étape : son créneau d'étalement est rendu (veridian_pacing.go).
+	if !p.preSend(sc) {
+		sc.selection.veridianReleasePacing()
+		return false
+	}
+	return true
+}
+
+func (p *veridianSendPipeline) preSend(sc *SendContext) bool {
 	w, workspace, entry := p.w, sc.Workspace, sc.Entry
 	integration := sc.Integration
 
@@ -306,6 +324,7 @@ func (p *veridianSendPipeline) Record(sc *SendContext, res SendResult) {
 		// Ambiguous post-DATA timeouts keep capacity consumed to avoid oversending.
 		if emailerror.IsBeforeAcceptance(res.Err) {
 			w.veridianReleaseDailyQuotas(workspace.ID, sc.quotaLeases)
+			sc.selection.veridianReleasePacing() // rien n'est parti : le créneau d'étalement est rendu
 		}
 		return
 	}

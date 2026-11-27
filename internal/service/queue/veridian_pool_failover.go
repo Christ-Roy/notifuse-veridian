@@ -366,6 +366,17 @@ type veridianSelectionResult struct {
 	Evaluations   []veridianCandidateEvaluation
 	Anchor        veridianAnchorInfo
 	Class         string
+
+	// pacingUndo rend le créneau d'étalement du candidat retenu si l'envoi n'a finalement pas lieu (veridian_pacing.go).
+	pacingUndo func()
+}
+
+// veridianReleasePacing : l'entrée retenue ne part pas (pré-filtre, rendu, quota, garde finale, refus avant acceptation).
+func (s *veridianSelectionResult) veridianReleasePacing() {
+	if s != nil && s.pacingUndo != nil {
+		s.pacingUndo()
+		s.pacingUndo = nil
+	}
 }
 
 // veridianEvaluateCandidate évalue TOUTES les portes d'un candidat, sans
@@ -385,7 +396,19 @@ func (w *EmailQueueWorker) veridianEvaluateCandidate(
 	entry *domain.EmailQueueEntry,
 	cand veridianFailoverCandidate,
 ) veridianCandidateEvaluation {
+	ev, _ := w.veridianEvaluateCandidateWithPacing(workspace, entry, cand)
+	return ev
+}
+
+// veridianEvaluateCandidateWithPacing : veridianEvaluateCandidate, plus l'annulation du créneau d'étalement réservé par
+// ce candidat (nil si aucun), à rendre si l'entrée ne part finalement pas (27/11).
+func (w *EmailQueueWorker) veridianEvaluateCandidateWithPacing(
+	workspace *domain.Workspace,
+	entry *domain.EmailQueueEntry,
+	cand veridianFailoverCandidate,
+) (veridianCandidateEvaluation, func()) {
 	ev := veridianCandidateEvaluation{Candidate: cand}
+	var pacingUndo func()
 
 	// 27/11/2026 (Robert) : un mail écrit à la main depuis la boîte part tout de suite, comme dans une vraie messagerie.
 	// Aucune porte de prospection ne le gouverne (exclusion de classe, fusible, débit, plafonds, chauffe, fenêtre,
@@ -395,7 +418,7 @@ func (w *EmailQueueWorker) veridianEvaluateCandidate(
 			ev.Gates = append(ev.Gates, veridianSkippedVerdict(g, "manual mail from the box: prospecting gates do not apply"))
 		}
 		ev.Outcome = "selected"
-		return ev
+		return ev, pacingUndo
 	}
 
 	excl := w.veridianExcludedClassVerdict(workspace, cand.Provider, entry)
@@ -406,7 +429,7 @@ func (w *EmailQueueWorker) veridianEvaluateCandidate(
 		for _, g := range []string{domain.VeridianGateReputation, domain.VeridianGateClassRate, domain.VeridianGateDailyCap, domain.VeridianGateSenderCap, domain.VeridianGateWindow, domain.VeridianGateRelay, domain.VeridianGatePacing} {
 			ev.Gates = append(ev.Gates, veridianSkippedVerdict(g, "class excluded on this profile"))
 		}
-		return ev
+		return ev, pacingUndo
 	}
 
 	rep := w.veridianReputationGateVerdict(workspace, cand.Provider, entry)
@@ -423,8 +446,12 @@ func (w *EmailQueueWorker) veridianEvaluateCandidate(
 	pacing := veridianPacingVerdict(workspace, cand.Provider, entry, cand.IntegrationID)
 	othersOpen := !rep.Blocked() && !daily.Blocked() && !sender.Blocked() && !window.Blocked() && !relay.Blocked() && !pacing.Blocked()
 	class := w.veridianProviderClassGateVerdict(workspace, cand.Provider, entry, othersOpen)
-	if othersOpen && !class.Blocked() && !veridianPacingTake(workspace, cand.Provider, entry, cand.IntegrationID) {
-		pacing = veridianPacingVerdict(workspace, cand.Provider, entry, cand.IntegrationID) // pris entre-temps : attente réelle
+	if othersOpen && !class.Blocked() {
+		taken, undo := veridianPacingTake(workspace, cand.Provider, entry, cand.IntegrationID)
+		if !taken {
+			pacing = veridianPacingVerdict(workspace, cand.Provider, entry, cand.IntegrationID) // pris entre-temps : attente réelle
+		}
+		pacingUndo = undo
 	}
 	ev.Gates = append(ev.Gates, rep, class, daily, sender, window, relay, pacing)
 
@@ -432,10 +459,10 @@ func (w *EmailQueueWorker) veridianEvaluateCandidate(
 		ev.Outcome = "blocked"
 		ev.Dominant = dominant
 		ev.BlockedDelay = longest
-		return ev
+		return ev, pacingUndo
 	}
 	ev.Outcome = "selected"
-	return ev
+	return ev, pacingUndo
 }
 
 // veridianSelectSendableIntegration essaie, dans l'ordre de priorité résolu
@@ -520,7 +547,7 @@ func (w *EmailQueueWorker) veridianSelectSendableIntegration(
 		// l'appelant committe IntegrationID sur le gagnant.
 		entry.IntegrationID = cand.IntegrationID
 
-		ev := w.veridianEvaluateCandidate(workspace, entry, cand)
+		ev, pacingUndo := w.veridianEvaluateCandidateWithPacing(workspace, entry, cand)
 		result.Evaluations = append(result.Evaluations, ev)
 		switch ev.Outcome {
 		case "excluded":
@@ -538,6 +565,7 @@ func (w *EmailQueueWorker) veridianSelectSendableIntegration(
 		won := cand
 		savedFrom, savedName = cand.FromAddress, cand.FromName // commit : le defer réappliquera ces valeurs (no-op)
 		result.Candidate = &won
+		result.pacingUndo = pacingUndo
 		return result
 	}
 

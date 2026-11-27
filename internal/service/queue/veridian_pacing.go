@@ -205,26 +205,44 @@ func veridianPacingDetail(remaining int, minutes float64) string {
 }
 
 // take réserve le créneau : à appeler quand toutes les portes du candidat sont ouvertes. Faux si un autre examen l'a
-// pris entre la lecture et la réservation (le candidat est alors bloqué comme par la porte).
-func (p *veridianPacer) take(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry, integrationID string) bool {
+// pris entre la lecture et la réservation (le candidat est alors bloqué comme par la porte). Vrai : undo rend le créneau
+// si l'envoi n'a finalement pas lieu (27/11, mesuré en prod : des entrées retenues puis refusées par la réservation
+// atomique du quota consommaient chacune un créneau de 4 min sans rien envoyer ; le profil n'envoyait plus rien).
+func (p *veridianPacer) take(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry, integrationID string) (bool, func()) {
 	if veridianPacingDisabled() || workspace == nil || !veridianPacingApplies(workspace, provider, entry) {
-		return true
+		return true, nil
 	}
 	now := p.now()
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	key := veridianPacingKey(workspace.ID, integrationID)
 	iv, _, _ := p.interval(workspace.ID, integrationID, now)
-	if slot, seen := p.slots[key]; iv > 0 && seen && !slot.last.IsZero() && now.Before(slot.last.Add(time.Duration(float64(iv)*slot.factor))) {
-		return false
+	prev, seen := p.slots[key]
+	if iv > 0 && seen && !prev.last.IsZero() && now.Before(prev.last.Add(time.Duration(float64(iv)*prev.factor))) {
+		return false, nil
 	}
 	factor := 1.0
 	if pct := veridianResolveJitterPct(workspace, provider, entry); pct > 0 && p.rng != nil {
 		factor = 1 + (p.rng()*2-1)*pct
 	}
-	p.slots[key] = veridianPacingSlot{last: now, factor: factor}
+	mine := veridianPacingSlot{last: now, factor: factor}
+	p.slots[key] = mine
 	p.sincePlan[key]++
-	return true
+	return true, func() {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		if p.slots[key] != mine {
+			return // un envoi suivant a déjà pris le créneau : rien à rendre
+		}
+		if seen {
+			p.slots[key] = prev
+		} else {
+			delete(p.slots, key)
+		}
+		if p.sincePlan[key] > 0 {
+			p.sincePlan[key]--
+		}
+	}
 }
 
 // veridianPacingVerdict / veridianPacingTake : points d'entrée des portes (no-op sans planificateur).
@@ -236,10 +254,10 @@ func veridianPacingVerdict(workspace *domain.Workspace, provider *domain.EmailPr
 	return p.verdict(workspace, provider, entry, integrationID)
 }
 
-func veridianPacingTake(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry, integrationID string) bool {
+func veridianPacingTake(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry, integrationID string) (bool, func()) {
 	p := veridianPacerHolder.Load()
 	if p == nil {
-		return true
+		return true, nil
 	}
 	return p.take(workspace, provider, entry, integrationID)
 }

@@ -33,6 +33,10 @@ raccourcit l'attente.
 - **Ne gouverne pas** : le transactionnel et les mails écrits depuis la boîte, un profil sans fenêtre, une capacité
   illimitée ou non mesurée, un plan illisible (la porte laisse passer, les plafonds tiennent toujours).
 - **Coupe-circuit** : `VERIDIAN_PACING=off` dans le job.
+- **Créneau rendu si rien ne part** (27/11, mesuré en prod une heure après la mise en ligne) : greenbeamcraft n'envoyait
+  plus rien, chaque créneau de 4 min étant pris par une entrée ensuite refusée par la réservation atomique du quota
+  (`quota_denied`). Le créneau réservé à la sélection est rendu si l'entrée ne part pas (`PreRender`, `PreSend`, refus
+  avant acceptation dans `Record`), sauf si un envoi suivant l'a déjà pris ; un refus ambigu après DATA le garde.
 - **État en mémoire, par processus** : après un redémarrage, le premier envoi d'un profil part tout de suite ; deux
   allocations simultanées (canari) peuvent doubler le rythme quelques minutes.
 - **Console** : raison « Étalé sur la fenêtre d'envoi », porte « Étalement » dans la trace (File d'envoi).
