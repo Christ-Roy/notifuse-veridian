@@ -10643,6 +10643,10 @@ msgstr "Relais"
 msgid "Relay and recipient provider pairs slowed or stopped by the reputation fuse. In brackets, how many are stopped."
 msgstr "Couples relais et fournisseur destinataire ralentis ou arrêtés par le fusible de réputation. Entre parenthèses, ceux qui sont arrêtés."
 
+#: src/components/send_queue/veridian_queue_labels.ts
+msgid "Relay blocklist"
+msgstr "Liste noire du relais"
+
 #: src/components/veridian_mon_ia.tsx
 #: src/components/veridian_mon_ia.tsx
 #: src/components/veridian_mon_ia.tsx
@@ -12627,6 +12631,10 @@ msgstr "Espace"
 msgid "Spacer Attributes"
 msgstr "Attributs de l'espaceur"
 
+#: src/components/send_queue/veridian_queue_labels.ts
+msgid "Spacing"
+msgstr "Étalement"
+
 #: src/components/sending_profiles/veridian_profile_labels.ts
 msgid "spam complaint received"
 msgstr "plainte pour spam reçue"
@@ -12657,6 +12665,10 @@ msgstr "Limite de vitesse : à quelle vitesse les emails partent vers ce fournis
 #: src/components/settings/veridian_sending_domains.tsx
 msgid "SPF (authorized senders)"
 msgstr "SPF (serveurs autorisés)"
+
+#: src/components/send_queue/veridian_queue_labels.ts
+msgid "Spread over the sending window"
+msgstr "Étalé sur la fenêtre d'envoi"
 
 #: src/components/segment/button_upsert.tsx
 msgid "SQL Arguments:"

@@ -62,9 +62,22 @@ func (s *veridianEmailProfileOverviewService) GetEmailProfilesOverview(ctx conte
 	if !membership.HasPermission(domain.PermissionResourceMessageHistory, domain.PermissionTypeRead) {
 		return nil, domain.NewPermissionError(domain.PermissionResourceMessageHistory, domain.PermissionTypeRead, "Insufficient permissions: read access to message history required")
 	}
+	overview, workspace, now, err := s.veridianComputeProfilesOverview(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	overview.TransactionalWatch = s.transactionalWatch(ctx, workspace, overview, now)
+	s.attachReplyForward(ctx, workspace, overview, now)
+	return overview, nil
+}
+
+// veridianComputeProfilesOverview calcule l'aperçu (plans, capacité, stock) SANS authentification : appelé par
+// GetEmailProfilesOverview après sa porte d'accès, et par le planificateur de l'étalement du worker (appel interne,
+// veridian_pacing_planner.go). Une seule source de capacité pour l'écran et pour l'étalement.
+func (s *veridianEmailProfileOverviewService) veridianComputeProfilesOverview(ctx context.Context, workspaceID string) (*domain.VeridianEmailProfilesOverview, *domain.Workspace, time.Time, error) {
 	workspace, err := s.workspaceRepo.GetByID(ctx, workspaceID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load workspace: %w", err)
+		return nil, nil, time.Time{}, fmt.Errorf("failed to load workspace: %w", err)
 	}
 
 	now := time.Now().UTC()
@@ -89,7 +102,7 @@ func (s *veridianEmailProfileOverviewService) GetEmailProfilesOverview(ctx conte
 		rows, counters, err := s.repo.GetPlanObservations(ctx, workspaceID, day)
 		if err != nil {
 			s.logger.WithField("error", err.Error()).Error("Failed to read email profile observations")
-			return nil, fmt.Errorf("failed to read email profile observations: %w", err)
+			return nil, nil, time.Time{}, fmt.Errorf("failed to read email profile observations: %w", err)
 		}
 		observed[key] = observation{rows: rows, counters: counters}
 	}
@@ -119,7 +132,7 @@ func (s *veridianEmailProfileOverviewService) GetEmailProfilesOverview(ctx conte
 		status, err := queue.VeridianComputeReputationStatus(scoped, s.messageHistoryRepo, workspace.ID, senderDomain, &integration.EmailProvider, now)
 		if err != nil {
 			s.logger.WithFields(map[string]interface{}{"workspace_id": workspaceID, "sender_domain": senderDomain, "error": err.Error()}).Error("Failed to compute reputation for overview")
-			return nil, fmt.Errorf("failed to compute reputation status: %w", err)
+			return nil, nil, time.Time{}, fmt.Errorf("failed to compute reputation status: %w", err)
 		}
 		reputation[integration.ID] = status
 	}
@@ -150,9 +163,7 @@ func (s *veridianEmailProfileOverviewService) GetEmailProfilesOverview(ctx conte
 		o := observed[veridianOverviewDayKey(day)]
 		return o.rows, o.counters
 	}, reputation, stock, now)
-	overview.TransactionalWatch = s.transactionalWatch(ctx, workspace, overview, now)
-	s.attachReplyForward(ctx, workspace, overview, now)
-	return overview, nil
+	return overview, workspace, now, nil
 }
 
 // attachReplyForward ajoute a chaque profil le suivi de la redirection des reponses. Une lecture du

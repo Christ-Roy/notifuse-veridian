@@ -86,11 +86,11 @@ func TestVeridianQueueReasons_UniqueAndComplete(t *testing.T) {
 		VeridianReasonProfilePaused, VeridianReasonNoProfile, VeridianReasonCircuitOpen,
 		VeridianReasonAnchorWait, VeridianReasonQuotaDenied, VeridianReasonRenderFailed,
 		VeridianReasonGuardRetry, VeridianReasonAutomationPaused, VeridianReasonSendError,
-		VeridianReasonDeferredLegacy, VeridianReasonInFlight,
+		VeridianReasonDeferredLegacy, VeridianReasonInFlight, VeridianReasonPacing,
 	} {
 		assert.True(t, seen[r], "manque %s", r)
 	}
-	assert.Len(t, VeridianQueueReasons, 19)
+	assert.Len(t, VeridianQueueReasons, 20)
 }
 
 func TestVeridianQueueGroupBy_Dimensions(t *testing.T) {

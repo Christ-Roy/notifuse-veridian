@@ -29,11 +29,11 @@ brique = une fiche + une ligne d'index.
    du lead. → `05`, `13`, `14`
 4. **La cascade de protection réputation est un empilement de gates dans le worker**
    (pause profil → circuit breaker → exclusion → throttle minute → daily cap → per-sender cap →
-   sending window → relais ZEN → pré-filtre → anti-hash), résolue `broadcast → infra → workspace →
+   sending window → relais ZEN → étalement → pré-filtre → anti-hash), résolue `broadcast → infra → workspace →
    défaut`. Retirer ou réordonner un gate sans relire toute la cascade grille un
    domaine d'envoi. Les plafonds se résolvent UNE fois (`veridianResolveCapLimits`),
    partagée avec `VeridianEffectivePlan` (API `emailProfiles.overview`) : ne pas les
-   recalculer ailleurs. → `03,04,08,19,21,22,23,25,27,28,29,30,31,32,38,54,56`
+   recalculer ailleurs. → `03,04,08,19,21,22,23,25,27,28,29,30,31,32,38,54,56,100`
 5. **`DROP DATABASE` toujours `WITH (FORCE)`, et le record système supprimé AVANT la
    base (record-first).** Sinon la base workspace se recrée toute seule dans la
    seconde (le worker ré-élit un record encore vivant). Staging uniquement ;
@@ -173,6 +173,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `59` automations observables (conception seule)
 - `60` capacité d'un profil (lot 6), CLI agent
 - `62` « pourquoi ça n'envoie pas » (V62) : raison de report, `queue.explain`
+- `100` **étalement** des envois commerciaux d'un profil sur sa fenêtre (porte `pacing`, `VERIDIAN_PACING=off`)
 - `69` plafonds et débits par défaut des 25 classes
 - `64` garde réseau partagée (`pkg/netguard`)
 - `67` liste blanche IMAP/SMTP `NOTIFUSE_TRUSTED_INTERNAL_HOSTS`, owner-only invitations

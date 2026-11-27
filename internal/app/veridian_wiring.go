@@ -895,6 +895,9 @@ func (a *App) veridianInitHandlers() error {
 	httpHandler.NewVeridianEmailProfileOverviewHandler(
 		veridianEmailProfileOverviewService, getJWTSecret, a.logger,
 	).RegisterRoutes(a.mux)
+	// 27/11/2026 : étalement des envois commerciaux d'un profil sur sa fenêtre (queue/veridian_pacing.go), lu sur
+	// la même capacité que l'écran ci-dessus. Coupe-circuit : VERIDIAN_PACING=off.
+	queue.SetVeridianPacingPlanner(service.NewVeridianPacingPlanner(veridianEmailProfileOverviewService))
 
 	// Lot 3 « page Profils d envoi » (08/10/2026) : POST /api/veridian/emailProfiles.create,
 	// profil SMTP (+ IMAP lie) cree en une seule ecriture, reserve au proprietaire.

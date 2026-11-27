@@ -37,6 +37,9 @@ const (
 	// impossible (rien ne part tant que la mesure n'a pas abouti).
 	VeridianReasonRelayBlocklisted = "relay_blocklisted"
 	VeridianReasonRelayUnverified  = "relay_unverified"
+	// 27/11/2026 (Robert) : le profil a envoyé trop récemment ; ses envois commerciaux du jour sont étalés sur ce
+	// qui reste de sa fenêtre (minutes restantes / envois utiles restants). Cf. queue/veridian_pacing.go.
+	VeridianReasonPacing = "pacing"
 )
 
 // Raisons de SORTIE d'une relance dont le premier mail (J0) n'a pas été livré
@@ -59,7 +62,7 @@ var VeridianQueueReasons = []string{
 	VeridianReasonAnchorWait, VeridianReasonQuotaDenied, VeridianReasonRenderFailed,
 	VeridianReasonGuardRetry, VeridianReasonAutomationPaused, VeridianReasonSendError,
 	VeridianReasonDeferredLegacy, VeridianReasonInFlight,
-	VeridianReasonRelayBlocklisted, VeridianReasonRelayUnverified,
+	VeridianReasonRelayBlocklisted, VeridianReasonRelayUnverified, VeridianReasonPacing,
 }
 
 // Issues d'une décision.
@@ -110,6 +113,7 @@ const (
 	VeridianGateSenderCap  = "sender_cap"
 	VeridianGateWindow     = "window"
 	VeridianGateRelay      = "relay_blocklist" // VER-225 : IP du relais hors liste noire
+	VeridianGatePacing     = "pacing"          // 27/11 : étalement des envois commerciaux sur la fenêtre
 )
 
 // Verdicts d'une porte.

@@ -762,7 +762,7 @@ func TestVeridianEvaluateCandidate_OpenCandidateIsSelectedAndConsumesItsToken(t 
 	assert.Equal(t, "selected", ev.Outcome)
 	assert.Nil(t, ev.Dominant)
 	assert.Zero(t, ev.BlockedDelay)
-	require.Len(t, ev.Gates, 7, "les sept portes sont toutes évaluées et tracées (VER-225 : relais ZEN)")
+	require.Len(t, ev.Gates, 8, "les huit portes sont toutes évaluées et tracées (VER-225 : relais ZEN ; 27/11 : étalement)")
 	assert.Equal(t, "relay_blocklist", ev.Gates[6].Gate, "la porte du relais est tracée, même non branchée")
 	for _, g := range ev.Gates {
 		assert.False(t, g.Blocked(), g.Gate)
@@ -805,7 +805,7 @@ func TestVeridianEvaluateCandidate_ExcludedClassSkipsEveryOtherGate(t *testing.T
 	ev := env.worker.veridianEvaluateCandidate(ws, entry, cand)
 	assert.Equal(t, "excluded", ev.Outcome)
 	assert.Equal(t, "google", ev.ExcludedClass)
-	require.Len(t, ev.Gates, 7)
+	require.Len(t, ev.Gates, 8)
 	g := gatesByName(ev)
 	assert.True(t, g[domain.VeridianGateExcluded].Blocked())
 	for _, name := range []string{domain.VeridianGateReputation, domain.VeridianGateClassRate, domain.VeridianGateDailyCap, domain.VeridianGateSenderCap, domain.VeridianGateWindow, domain.VeridianGateRelay} {

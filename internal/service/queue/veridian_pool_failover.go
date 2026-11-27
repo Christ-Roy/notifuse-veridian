@@ -392,7 +392,7 @@ func (w *EmailQueueWorker) veridianEvaluateCandidate(
 	if excl.Blocked() {
 		ev.Outcome = "excluded"
 		ev.ExcludedClass = excl.Class
-		for _, g := range []string{domain.VeridianGateReputation, domain.VeridianGateClassRate, domain.VeridianGateDailyCap, domain.VeridianGateSenderCap, domain.VeridianGateWindow, domain.VeridianGateRelay} {
+		for _, g := range []string{domain.VeridianGateReputation, domain.VeridianGateClassRate, domain.VeridianGateDailyCap, domain.VeridianGateSenderCap, domain.VeridianGateWindow, domain.VeridianGateRelay, domain.VeridianGatePacing} {
 			ev.Gates = append(ev.Gates, veridianSkippedVerdict(g, "class excluded on this profile"))
 		}
 		return ev
@@ -407,9 +407,15 @@ func (w *EmailQueueWorker) veridianEvaluateCandidate(
 	if !window.Blocked() {
 		relay = w.veridianRelayBlocklistVerdict(workspace, cand, entry)
 	}
-	othersOpen := !rep.Blocked() && !daily.Blocked() && !sender.Blocked() && !window.Blocked() && !relay.Blocked()
+	// 27/11 : l'étalement sur la fenêtre (veridian_pacing.go) est LU avec les portes sans effet de bord ; le jeton de
+	// classe n'est pris que si le créneau du profil est libre, et le créneau n'est réservé que si la classe passe aussi.
+	pacing := veridianPacingVerdict(workspace, cand.Provider, entry, cand.IntegrationID)
+	othersOpen := !rep.Blocked() && !daily.Blocked() && !sender.Blocked() && !window.Blocked() && !relay.Blocked() && !pacing.Blocked()
 	class := w.veridianProviderClassGateVerdict(workspace, cand.Provider, entry, othersOpen)
-	ev.Gates = append(ev.Gates, rep, class, daily, sender, window, relay)
+	if othersOpen && !class.Blocked() && !veridianPacingTake(workspace, cand.Provider, entry, cand.IntegrationID) {
+		pacing = veridianPacingVerdict(workspace, cand.Provider, entry, cand.IntegrationID) // pris entre-temps : attente réelle
+	}
+	ev.Gates = append(ev.Gates, rep, class, daily, sender, window, relay, pacing)
 
 	if dominant, longest := veridianDominantBlock(ev.Gates); dominant != nil {
 		ev.Outcome = "blocked"

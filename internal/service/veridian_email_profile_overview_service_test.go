@@ -252,6 +252,37 @@ func TestVeridianEmailProfileOverviewService(t *testing.T) {
 		}
 	})
 
+	// 27/11 : le planificateur de l'étalement (veridian_pacing_planner.go) lit le MÊME calcul que l'API, sans
+	// authentification (appel interne du worker) : aucune attente sur auth ici, gomock refuserait tout appel.
+	t.Run("etalement : meme capacite que l'API, sans authentification", func(t *testing.T) {
+		history.EXPECT().CountComplainedSinceForSenderDomain(gomock.Any(), "ws1", gomock.Any(), gomock.Any()).Return(0, nil).AnyTimes()
+		history.EXPECT().CountSentSinceForSenderDomain(gomock.Any(), "ws1", gomock.Any(), gomock.Any()).Return(0, nil).AnyTimes()
+		history.EXPECT().CountHardBouncedSinceForSenderDomain(gomock.Any(), "ws1", gomock.Any(), gomock.Any()).Return(0, nil).AnyTimes()
+		history.EXPECT().ReputationCountsByClassSinceForSenderDomain(gomock.Any(), "ws1", gomock.Any(), gomock.Any()).Return(map[string]domain.VeridianReputationCounts{}, nil).AnyTimes()
+		workspaces.EXPECT().GetByID(gomock.Any(), "ws1").Return(overviewTestWorkspace(), nil).Times(2)
+		pace, err := NewVeridianPacingPlanner(svc).ProfilePace(context.Background(), "ws1")
+		require.NoError(t, err)
+
+		readOnly := &domain.UserWorkspace{Permissions: domain.UserPermissions{domain.PermissionResourceMessageHistory: {Read: true}}}
+		auth.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), "ws1").Return(context.Background(), &domain.User{}, readOnly, nil)
+		out, err := svc.GetEmailProfilesOverview(context.Background(), "ws1")
+		require.NoError(t, err)
+		require.Len(t, pace, len(out.Profiles))
+		bounded := 0
+		for _, p := range out.Profiles {
+			c, in := p.Plan.Capacity, pace[p.IntegrationID]
+			assert.Equal(t, float64(c.WindowMinutesLeft), in.MinutesLeft, p.IntegrationID)
+			if c.Applicable && c.RemainingUseful != nil {
+				bounded++
+				assert.True(t, in.Known, p.IntegrationID)
+				assert.Equal(t, *c.RemainingUseful, in.Remaining, "%s : l'étalement lit la capacité de l'écran", p.IntegrationID)
+			} else {
+				assert.False(t, in.Known, p.IntegrationID)
+			}
+		}
+		assert.Positive(t, bounded, "la fixture porte au moins un profil borné : sinon le test ne compare rien")
+	})
+
 	t.Run("surveillance du profil transactionnel : mesuree, jamais bloquante", func(t *testing.T) {
 		readOnly := &domain.UserWorkspace{Permissions: domain.UserPermissions{domain.PermissionResourceMessageHistory: {Read: true}}}
 		auth.EXPECT().AuthenticateUserForWorkspace(gomock.Any(), "ws1").Return(context.Background(), &domain.User{}, readOnly, nil)

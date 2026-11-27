@@ -324,10 +324,10 @@ func providerError() *emailerror.ClassifiedError {
 }
 
 // VER-225 : la porte du relais ZEN est tracée, après la fenêtre (elle n'est évaluée qu'une fois
-// la fenêtre ouverte).
+// la fenêtre ouverte). 27/11 : l'étalement vient en dernier (il ne réserve son créneau que si tout est ouvert).
 func TestVeridianCanonicalGateOrder_RelayAfterWindow(t *testing.T) {
 	n := len(veridianCanonicalGateOrder)
-	if n < 2 || veridianCanonicalGateOrder[n-1] != domain.VeridianGateRelay || veridianCanonicalGateOrder[n-2] != domain.VeridianGateWindow {
+	if n < 3 || veridianCanonicalGateOrder[n-1] != domain.VeridianGatePacing || veridianCanonicalGateOrder[n-2] != domain.VeridianGateRelay || veridianCanonicalGateOrder[n-3] != domain.VeridianGateWindow {
 		t.Fatalf("ordre canonique : %v", veridianCanonicalGateOrder)
 	}
 }

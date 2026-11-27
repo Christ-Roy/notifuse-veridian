@@ -59,7 +59,7 @@ describe('queueExplainService', () => {
     expect(vi.mocked(api.post).mock.calls[1][1]).toMatchObject({ limit: 1 })
   })
 
-  it('connaît les 16 codes de raison du contrat', () => {
+  it('connaît les 17 codes de raison du contrat', () => {
     expect([...QUEUE_REASON_CODES].sort()).toEqual(
       [
         'not_examined',
@@ -77,7 +77,8 @@ describe('queueExplainService', () => {
         'guard_retry',
         'automation_paused',
         'send_error',
-        'deferred_legacy'
+        'deferred_legacy',
+        'pacing'
       ].sort()
     )
   })

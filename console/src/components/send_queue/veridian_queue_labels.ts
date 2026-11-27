@@ -48,6 +48,8 @@ export function useQueueLabels() {
         return t`Send error`
       case 'deferred_legacy':
         return t`Deferred (reason not recorded)`
+      case 'pacing':
+        return t`Spread over the sending window`
       case '':
         return t`No reason`
       default:
@@ -89,6 +91,10 @@ export function useQueueLabels() {
         return t`Sender cap`
       case 'window':
         return t`Sending window`
+      case 'relay_blocklist':
+        return t`Relay blocklist`
+      case 'pacing':
+        return t`Spacing`
       default:
         return gate
     }

@@ -27,7 +27,9 @@ export const QUEUE_REASON_CODES = [
   'guard_retry',
   'automation_paused',
   'send_error',
-  'deferred_legacy'
+  'deferred_legacy',
+  // 27/11/2026 : le profil vient d'envoyer, ses envois commerciaux sont étalés sur sa fenêtre (queue/veridian_pacing.go)
+  'pacing'
 ] as const
 export type QueueReasonCode = (typeof QUEUE_REASON_CODES)[number]
 
@@ -54,7 +56,15 @@ export interface QueueOrphans {
 }
 
 export type GateVerdict = 'pass' | 'block' | 'slowed' | 'skipped'
-export type GateName = 'excluded' | 'reputation' | 'class_rate' | 'daily_cap' | 'sender_cap' | 'window'
+export type GateName =
+  | 'excluded'
+  | 'reputation'
+  | 'class_rate'
+  | 'daily_cap'
+  | 'sender_cap'
+  | 'window'
+  | 'relay_blocklist'
+  | 'pacing'
 export type CandidateOutcome = 'selected' | 'blocked' | 'excluded' | 'paused' | 'circuit_open' | 'skipped'
 
 export interface TraceGate {
