@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"testing"
 	"time"
@@ -275,6 +276,51 @@ func TestEmailHandler_TestProviderDedicatedRateLimit(t *testing.T) {
 		} else {
 			assert.Equal(t, http.StatusTooManyRequests, recorder.Code)
 		}
+	}
+}
+
+// Reprise amont 35.0 : le hook de clic par lien (veridian_link_click.go) reçoit l'URL cliquée, seulement pour un clic
+// humain. Un bot, ou un clic trop rapide (< 7 s), ne l'appelle pas. La redirection a lieu dans tous les cas.
+func TestEmailHandler_HandleClickRedirection_HookLienClic(t *testing.T) {
+	defer func(prev func(context.Context, string, string, string, time.Time)) { veridianOnLinkClick = prev }(veridianOnLinkClick)
+
+	cas := []struct {
+		name      string
+		userAgent string
+		ts        time.Time
+		veutHook  bool
+	}{
+		{name: "clic humain : hook appelé", userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0", ts: time.Now().Add(-10 * time.Second), veutHook: true},
+		{name: "bot : hook non appelé", userAgent: "Googlebot/2.1 (+http://www.google.com/bot.html)", ts: time.Now().Add(-10 * time.Second), veutHook: false},
+		{name: "clic trop rapide : hook non appelé", userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0", ts: time.Now(), veutHook: false},
+	}
+	for _, c := range cas {
+		t.Run(c.name, func(t *testing.T) {
+			mockEmailService, _, handler, _ := setupEmailHandlerTest(t)
+			mockEmailService.EXPECT().VisitLink(gomock.Any(), "message-123", "workspace-123").Return(nil).AnyTimes()
+
+			var appels []string
+			veridianOnLinkClick = func(ctx context.Context, ws, mid, lien string, at time.Time) {
+				appels = append(appels, ws+"|"+mid+"|"+lien)
+			}
+
+			q := url.Values{}
+			q.Set("mid", "message-123")
+			q.Set("wid", "workspace-123")
+			q.Set("url", "https://example.com/offre?utm_content=haut")
+			q.Set("ts", strconv.FormatInt(c.ts.Unix(), 10))
+			req := httptest.NewRequest(http.MethodGet, "/visit?"+q.Encode(), nil)
+			req.Header.Set("User-Agent", c.userAgent)
+			w := httptest.NewRecorder()
+			handler.handleClickRedirection(w, req)
+
+			assert.Equal(t, http.StatusSeeOther, w.Code, "la redirection a toujours lieu")
+			if c.veutHook {
+				assert.Equal(t, []string{"workspace-123|message-123|https://example.com/offre?utm_content=haut"}, appels)
+			} else {
+				assert.Empty(t, appels)
+			}
+		})
 	}
 }
 

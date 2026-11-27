@@ -11,3 +11,4 @@ internal/repository/message_history_postgre.go	1
 internal/service/queue/worker.go	1
 console/src/services/api/workspace.ts	1
 internal/migrations/v32.go	1
+internal/http/email_handler.go	1

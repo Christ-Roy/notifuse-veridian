@@ -27,9 +27,9 @@ const avant = await lignes()
 if (avant.length === 0) { console.log('NON ABOUTI : aucun modèle à chercher'); await browser.close(); process.exit(2) }
 await cap('modeles_avant_recherche')
 
-// Terme : les 4 premiers caractères du premier nom affiché (le nom complet est dans la première cellule)
 const premier = (avant[0].split('\n').find((l) => l.trim().length >= 4) || '').trim()
-const terme = premier.slice(0, 4)
+// Nom complet du premier modèle : doit réduire la liste (une ligne sur plusieurs), pas la laisser intacte
+const terme = premier
 await boite.fill(terme)
 await page.waitForTimeout(800)
 const apres = await lignes()
@@ -44,4 +44,4 @@ await cap('modeles_recherche_vide')
 const res = { terme, avant: avant.length, apres: apres.length, tous_contiennent_terme: tous, etat_vide: vide > 0 }
 await browser.close()
 console.log('RESULTAT ' + JSON.stringify(res))
-process.exit(tous && apres.length > 0 && apres.length <= avant.length && vide > 0 ? 0 : 1)
+process.exit(tous && apres.length > 0 && apres.length < avant.length && vide > 0 ? 0 : 1)

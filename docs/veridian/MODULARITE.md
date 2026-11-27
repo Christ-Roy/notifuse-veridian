@@ -26,6 +26,7 @@ Liste de référence : `scripts/veridian/frozen-files.tsv` (le détecteur la lit
 | `internal/service/queue/worker.go` | cascade d'envoi : processEntry n'appelle plus que les cinq points de `SendPipeline` (section 3 bis) |
 | `console/src/services/api/workspace.ts` | client API upstream |
 | `internal/migrations/v32.go` | migration upstream, jamais retouchée |
+| `internal/http/email_handler.go` | ajouté le 27/11/2026 (reprise amont 35.0, clics par lien) : l'URL cliquée n'existe que dans `handleClickRedirection` ; `VisitLink` ne la reçoit pas. Budget : une ligne, l'appel au hook `veridianOnLinkClick` (variable déclarée dans `veridian_link_click.go`, nil = rien), après les filtres bot et 7 s |
 
 Ce qui reste de Veridian dans `app.go` après L0, volontairement : le rate-limit global et les en-têtes de sécurité de `Start()` (garde-fou `check-rate-limit-coverage.sh`, ordre avec le traçage) ; les appels aux constructeurs upstream dont un argument est Veridian (`NewGuardedSparkPostService`, `SchedulerEndpoint()`, client SSRF du flux de données). Les extraire demande de changer une signature upstream : jalon 3.
 

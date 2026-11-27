@@ -211,6 +211,7 @@ func (h *EmailHandler) handleClickRedirection(w http.ResponseWriter, r *http.Req
 	// Record click only if it passes bot detection
 	if shouldRecord {
 		_ = h.emailService.VisitLink(r.Context(), messageID, workspaceID)
+		veridianOnLinkClick(r.Context(), workspaceID, messageID, redirectTo, time.Now())
 	}
 
 	// Always redirect regardless of whether we recorded
