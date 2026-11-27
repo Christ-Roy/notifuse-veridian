@@ -35,7 +35,7 @@ export function VeridianQueueGroups({ groups, canWrite, recomputingKey, onOpenEn
   const nameOf = (row: QueueTreeRow) => {
     switch (row.level) {
       case 'automation':
-        return <Text strong>{row.name || row.value || '—'}</Text>
+        return <Text strong>{row.name || row.value || t`Without automation`}</Text>
       case 'node': {
         const node = row.value
         return <Text>{node ? t`Node ${node}` : t`No node`}</Text>

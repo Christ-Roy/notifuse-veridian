@@ -15250,6 +15250,10 @@ msgstr "con filtros"
 msgid "with status"
 msgstr "con estado"
 
+#: src/components/send_queue/veridian_queue_groups.tsx
+msgid "Without automation"
+msgstr ""
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Working days"
