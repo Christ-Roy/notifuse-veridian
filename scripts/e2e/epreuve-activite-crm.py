@@ -26,6 +26,7 @@ ap.add_argument("--nettoyer-seulement", action="store_true")
 ap.add_argument("--reprendre")
 ap.add_argument("--stamp", help="suffixe des adresses d'épreuve (minuscules et chiffres)")
 ap.add_argument("--nom", default="Épreuve VER-267", help="nom affiché de la boîte d'épreuve (celui de la fiche CRM)")
+ap.add_argument("--refus", action="store_true", help="en plus : un envoi vers un domaine .invalid (jamais résolu, rien ne sort) dont l'issue doit revenir « failed » avec la raison")
 a = ap.parse_args()
 if not re.fullmatch(r"[a-z0-9]{1,40}", a.ws) or (a.stamp and not re.fullmatch(r"[a-z0-9]{1,20}", a.stamp)):
     print("NON ABOUTI : --ws et --stamp en minuscules et chiffres"); sys.exit(2)
@@ -134,11 +135,12 @@ try:
     # 2. Envoi réel par le profil d'épreuve, vers la boîte d'épreuve.
     if not E.get("envoye"):
         E["avant"] = sorted({str(m.get("id")) for m in messages()} | {str(m.get("id")) for m in messages(kind="reply_human")}); save()
+        t0 = time.time()
         r = cli("mail:send", WS, "--profile", E["integ_envoi"], "--to", BOITE, "--subject", OBJET,
                 "--text", f"Bonjour, ceci est l'envoi de l'épreuve {S} (VER-267), entre deux adresses d'épreuve.", "--yes", "--json", check=False)
         ok = r.get("_rc") in (None, 0) and "error" not in json.dumps(r).lower()
-        E["envoye"] = {"a": time.strftime("%H:%M:%SZ", time.gmtime()), "reponse": r}; save()
-        preuve("envoi demandé par le profil d'épreuve", ok, json.dumps(r, ensure_ascii=False)[:250])
+        E["envoye"] = {"a": time.strftime("%H:%M:%SZ", time.gmtime()), "duree_s": round(time.time() - t0, 1), "reponse": r}; save()
+        preuve("envoi parti tout de suite (issue « sent » rendue par l'API)", ok and r.get("status") == "sent", json.dumps(r, ensure_ascii=False)[:250])
         if not ok:
             raise SystemExit
 
@@ -173,6 +175,15 @@ try:
                 print(f"  +{int(time.time() - t0)} s : réponse pas encore reçue")
         preuve("réponse humaine reçue, classée reply_human", bool(rr), json.dumps({k: (rr or {}).get(k) for k in ("id", "kind", "from", "from_name", "subject")}, ensure_ascii=False))
         E["reponse_recue"] = rr and rr.get("id"); save()
+    # 5. --refus : le mail écrit à la main part tout de suite et l'API rend son issue réelle (27/11) ; un domaine .invalid
+    # (RFC 2606, jamais résolu) est refusé avant tout SMTP par le pré-filtre : rien ne sort, l'issue doit dire pourquoi.
+    if a.refus and not E.get("refus"):
+        t0 = time.time()
+        r = cli("mail:send", WS, "--profile", E["integ_envoi"], "--to", f"epreuve-refus-{S}@domaine-absent-{S}.invalid", "--subject", f"{a.nom} : refus {S}",
+                "--text", "Envoi d'épreuve vers un domaine qui n'existe pas.", "--yes", "--json", check=False)
+        E["refus"] = {"a": time.strftime("%H:%M:%SZ", time.gmtime()), "duree_s": round(time.time() - t0, 1), "reponse": r}; save()
+        preuve("envoi refusé : issue rendue tout de suite, avec la raison", r.get("status") == "failed" and bool(r.get("error")),
+               json.dumps({k: r.get(k) for k in ("status", "error", "note")}, ensure_ascii=False) + f" en {E['refus']['duree_s']} s")
 finally:
     if not a.reprendre or E.get("reponse_recue"):
         nettoyer()

@@ -57,6 +57,8 @@ describe('nouveau message', () => {
     const outcome = await screen.findByTestId('compose-outcome')
     expect(outcome).toHaveAttribute('data-outcome', 'failed')
     expect(outcome).toHaveTextContent('550 5.1.1 user unknown')
+    expect(outcome).toHaveTextContent('The message was not sent')
+    expect(outcome).not.toHaveTextContent(/relay refused/i)
   })
 
   it('refus 409 : raison affichée, texte conservé', async () => {

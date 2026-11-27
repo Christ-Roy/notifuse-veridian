@@ -8681,8 +8681,12 @@ msgid "No reason"
 msgstr "No reason"
 
 #: src/components/mail/veridian_mail_send_outcome.tsx
-msgid "No reason given by the relay."
-msgstr "No reason given by the relay."
+#~ msgid "No reason given by the relay."
+#~ msgstr "No reason given by the relay."
+
+#: src/components/mail/veridian_mail_send_outcome.tsx
+msgid "No reason given."
+msgstr "No reason given."
 
 #: src/components/email_builder/ui/BackgroundInput.tsx
 msgid "No Repeat"
@@ -13434,6 +13438,10 @@ msgstr "The mailbox service is not answering. Try again in a moment."
 msgid "The measure could not be made. Nothing is blocked."
 msgstr "The measure could not be made. Nothing is blocked."
 
+#: src/components/mail/veridian_mail_send_outcome.tsx
+msgid "The message was not sent"
+msgstr "The message was not sent"
+
 #: src/components/veridian_organisation.tsx
 msgid "The name and logo come from your Veridian organization and are changed there."
 msgstr "The name and logo come from your Veridian organization and are changed there."
@@ -13486,8 +13494,8 @@ msgid "The relay accepted it; it is in the conversation."
 msgstr "The relay accepted it; it is in the conversation."
 
 #: src/components/mail/veridian_mail_send_outcome.tsx
-msgid "The relay refused the message"
-msgstr "The relay refused the message"
+#~ msgid "The relay refused the message"
+#~ msgstr "The relay refused the message"
 
 #: src/pages/AnalyticsPage.tsx
 msgid "The requested workspace could not be found."

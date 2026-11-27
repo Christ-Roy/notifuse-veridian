@@ -25,5 +25,13 @@ if [ "${1:-}" = "--selftest" ]; then
   exit "$(pire "$a" "$b")"
 fi
 python3 "$HERE/cli_coverage_check.py" "$ROOT" --source "$SRC"; a=$?
-python3 "$HERE/openapi_bundle_check.py" "$ROOT"; b=$?
+# 27/11 (Robert : le bastion ne calcule pas) : hors CI, le bundle OpenAPI (npx redocly) ne tourne que si openapi/ ou
+# openapi.json bougent depuis l'amont, et alors en nice -n 19 ; il ne dépend que d'eux (version de redocly figée). La CI
+# (CI=true) le joue à chaque fois.
+if [ -z "${CI:-}" ] && git -C "$ROOT" rev-parse '@{upstream}' >/dev/null 2>&1 \
+   && git -C "$ROOT" diff --quiet '@{upstream}' -- openapi openapi.json 2>/dev/null; then
+  echo "openapi : inchangé depuis l'amont, bundle laissé à la CI"; b=0
+else
+  nice -n 19 python3 "$HERE/openapi_bundle_check.py" "$ROOT"; b=$?
+fi
 exit "$(pire "$a" "$b")"

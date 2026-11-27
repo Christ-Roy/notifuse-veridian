@@ -222,7 +222,8 @@ func TestSend_WaitsForTheRealOutcome(t *testing.T) {
 			}
 		}
 		code, out := send(t, e)
-		if code != 200 || out["status"] != "failed" || out["error"] != "550 5.1.1 user unknown" {
+		// 27/11 : un refus du pré-filtre n'est pas un refus du relais ; la note ne nomme pas qui refuse, error le dit.
+		if code != 200 || out["status"] != "failed" || out["error"] != "550 5.1.1 user unknown" || !strings.Contains(out["note"].(string), "pas parti") {
 			t.Fatalf("%d %v", code, out)
 		}
 	})

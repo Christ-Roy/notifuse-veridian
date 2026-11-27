@@ -485,7 +485,7 @@ def _send(a, route, body, what):
     elif data.get("status") == "sent":
         print(f"✓ envoyé : {data.get('message_id')} · fil {data.get('thread_id')}")
     elif data.get("status") == "failed":
-        print(f"✗ refusé par le relais : {data.get('error') or 'sans raison donnée'} ({data.get('message_id')})", file=sys.stderr)
+        print(f"✗ pas parti : {data.get('error') or 'sans raison donnée'} ({data.get('message_id')})", file=sys.stderr)
     else:
         print(f"… envoi en cours : {data.get('message_id')} · fil {data.get('thread_id')}\n  {data.get('note')}")
     # 27/11 : un mail écrit à la main part tout de suite (comme une messagerie) ; un refus du relais est un échec.

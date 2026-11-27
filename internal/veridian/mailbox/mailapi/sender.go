@@ -202,7 +202,7 @@ func (q *QueueSender) Send(ctx context.Context, req SendRequest, actor Actor) (*
 	return res, nil
 }
 
-// awaitOutcome relit l'issue de l'envoi jusqu'à Wait : parti (rangé dans la boîte) ou refusé (failed_at, avec la
+// awaitOutcome relit l'issue de l'envoi jusqu'à Wait : parti (rangé dans la boîte) ou pas parti (failed_at, avec la
 // raison). Au-delà, ou si la lecture échoue, la réponse reste « en cours » : le mail n'est jamais perdu, il est en file.
 func (q *QueueSender) awaitOutcome(ctx context.Context, ws, historyID string, res *SendResult) {
 	if q.Wait <= 0 || q.Store == nil {
@@ -234,7 +234,7 @@ func (q *QueueSender) awaitOutcome(ctx context.Context, ws, historyID string, re
 			return
 		case mailbox.SendStateFailed:
 			res.Status, res.Error = mailbox.SendStateFailed, out.Reason
-			res.Note = "le relais n'a pas accepté le mail"
+			res.Note = "le mail n'est pas parti (refus du pré-filtre ou du relais : voir error)"
 			return
 		}
 	}

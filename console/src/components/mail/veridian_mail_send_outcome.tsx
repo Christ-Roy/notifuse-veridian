@@ -42,8 +42,8 @@ export function MailSendOutcome({
         data-testid={testId}
         data-outcome="failed"
         style={style}
-        message={t`The relay refused the message`}
-        description={result.error || t`No reason given by the relay.`}
+        message={t`The message was not sent`}
+        description={result.error || t`No reason given.`}
         closable={closable}
         onClose={onClose}
       />
