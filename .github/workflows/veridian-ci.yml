@@ -1058,18 +1058,24 @@ jobs:
         run: |
           set -euo pipefail
           EXPECTED_SHA="${GITHUB_SHA::8}"
+          # 1) Réveil (Sablier) et SHA déployé : jusqu'à 10 min, comme avant.
           for i in {1..60}; do
             VERSION=$(curl -fsS https://notifuse.staging.veridian.site/api/version 2>/dev/null || true)
             if echo "$VERSION" | jq -e --arg sha "$EXPECTED_SHA" \
               '.git_sha | type == "string" and startswith($sha)' >/dev/null 2>&1; then
               echo "Staging API ready on SHA ${EXPECTED_SHA} after ${i} attempt(s)"
-              exit 0
+              break
             fi
+            [ "$i" = 60 ] && { echo "::error::Staging n'a jamais exposé l'API JSON du SHA ${EXPECTED_SHA}"; exit 1; }
             echo "  attempt ${i}: Sablier démarre encore l'app ou le SHA déployé n'est pas prêt"
             sleep 10
           done
-          echo "::error::Staging n'a jamais exposé l'API JSON du SHA ${EXPECTED_SHA}"
-          exit 1
+          # 2) STABLE, pas seulement réveillée (27/11/2026, run 45912109689) : une seule lecture du bon SHA passait pendant
+          # la bascule d'allocation ; l'E2E prenait « Failed to fetch » et « redirect count exceeded ». 6 lectures saines
+          # consécutives, sans redirection (SHA, setup.status, une route /api, la console), bornées à 3 min.
+          chmod +x scripts/ci/staging-stable.sh scripts/ci/test-staging-stable.sh
+          scripts/ci/test-staging-stable.sh
+          scripts/ci/staging-stable.sh https://notifuse.staging.veridian.site "$EXPECTED_SHA"
       - name: Resolve staging DB container (Nomad alloc)
         run: |
           set -euo pipefail
