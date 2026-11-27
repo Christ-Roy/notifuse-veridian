@@ -64,15 +64,24 @@ export function sanitizeInstallLinks(raw: unknown): InstallLinks | null {
   }
 }
 
-/** Lit les liens au Hub (4 s max). Rend null en cas d'échec : l'appelant affiche le repli. */
+/**
+ * Langue des libellés servis par le Hub (assistants, étape ChatGPT, phrase) : `lang=fr|en`, celle du compte. Le 27/11, la
+ * console anglaise affichait « Ajouter à Claude » : le Hub ne recevait aucune langue. Toute langue autre que l'anglais → fr.
+ */
+export function installLinksLang(locale: string | undefined): 'fr' | 'en' {
+  return (locale || '').toLowerCase().startsWith('en') ? 'en' : 'fr'
+}
+
+/** Lit les liens au Hub (4 s max), dans la langue du compte. Rend null en cas d'échec : l'appelant affiche le repli. */
 export async function fetchInstallLinks(
   fetchImpl: typeof fetch = fetch,
-  timeoutMs = 4000
+  timeoutMs = 4000,
+  locale?: string
 ): Promise<InstallLinks | null> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
   try {
-    const resp = await fetchImpl(VERIDIAN_MCP_LINKS_URL, { signal: ctrl.signal })
+    const resp = await fetchImpl(`${VERIDIAN_MCP_LINKS_URL}&lang=${installLinksLang(locale)}`, { signal: ctrl.signal })
     if (!resp.ok) return null
     return sanitizeInstallLinks(await resp.json())
   } catch {

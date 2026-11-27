@@ -11,7 +11,7 @@ import { CopyOutlined } from '@ant-design/icons'
 import { useLingui } from '@lingui/react/macro'
 import { useQuery } from '@tanstack/react-query'
 import { veridianApi, type VeridianModeResponse } from '../services/api/veridian'
-import { fetchInstallLinks, type InstallLinks } from '../lib/veridian_connect_ai'
+import { fetchInstallLinks, installLinksLang, type InstallLinks } from '../lib/veridian_connect_ai'
 
 async function copy(text: string, okMessage: string) {
   try {
@@ -23,7 +23,8 @@ async function copy(text: string, okMessage: string) {
 }
 
 export function VeridianInstallLinks() {
-  const { t } = useLingui()
+  const { t, i18n } = useLingui()
+  const lang = installLinksLang(i18n.locale)
 
   const { data: mode } = useQuery<VeridianModeResponse | null>({
     queryKey: ['veridian', 'mode'],
@@ -33,8 +34,8 @@ export function VeridianInstallLinks() {
   })
   const managed = mode?.mode === 'veridian-managed'
   const { data: links } = useQuery<InstallLinks | null>({
-    queryKey: ['veridian', 'mcp-install-links'],
-    queryFn: () => fetchInstallLinks(),
+    queryKey: ['veridian', 'mcp-install-links', lang],
+    queryFn: () => fetchInstallLinks(fetch, 4000, lang),
     enabled: managed,
     staleTime: 5 * 60 * 1000,
     retry: false

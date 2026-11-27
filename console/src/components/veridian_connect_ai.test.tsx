@@ -4,7 +4,7 @@ import { i18n } from '@lingui/core'
 import { I18nProvider } from '@lingui/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { VeridianInstallLinks } from './veridian_connect_ai'
-import { fetchInstallLinks, sanitizeInstallLinks } from '../lib/veridian_connect_ai'
+import { fetchInstallLinks, installLinksLang, sanitizeInstallLinks } from '../lib/veridian_connect_ai'
 
 i18n.loadAndActivate({ locale: 'en', messages: {} })
 
@@ -51,6 +51,18 @@ describe('sanitizeInstallLinks', () => {
 })
 
 describe('fetchInstallLinks', () => {
+  // 27/11 : sans langue, le Hub rendait ses libellés en français dans une console anglaise.
+  it('transmet la langue du compte au Hub (lang=fr|en)', async () => {
+    const f = vi.fn().mockResolvedValue({ ok: true, json: async () => HUB_RESPONSE })
+    await fetchInstallLinks(f as unknown as typeof fetch, 4000, 'en-US')
+    expect(f.mock.calls[0][0]).toContain('&lang=en')
+    await fetchInstallLinks(f as unknown as typeof fetch, 4000, 'fr')
+    expect(f.mock.calls[1][0]).toContain('&lang=fr')
+    await fetchInstallLinks(f as unknown as typeof fetch)
+    expect(f.mock.calls[2][0]).toContain('&lang=fr')
+    expect(installLinksLang('de')).toBe('fr')
+  })
+
   it('lit la route du Hub', async () => {
     const f = vi.fn().mockResolvedValue({ ok: true, json: async () => HUB_RESPONSE })
     const out = await fetchInstallLinks(f as unknown as typeof fetch)
