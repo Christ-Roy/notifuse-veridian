@@ -156,7 +156,7 @@ func TestFils_RejeuV2_401(t *testing.T) {
 func TestFils_OrigineNavigateur_Refusee_MemeSigne(t *testing.T) {
 	mux, st := serveur(t)
 	corps, _ := json.Marshal(map[string]any{"hub_user_id": hubUser, "tenant_id": hubTenant, "messages": []any{}})
-	for en, v := range map[string]string{"Origin": "https://notifuse.app.veridian.site", "Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "cors"} {
+	for en, v := range map[string]string{"Origin": "https://notifuse.app.veridian.site", "Sec-Fetch-Site": "same-origin", "Sec-Fetch-Dest": "empty"} {
 		r := signe(http.MethodPut, "/api/hub/ia/fils/"+session1, corps)
 		r.Header.Set(en, v)
 		rec := httptest.NewRecorder()
@@ -167,6 +167,19 @@ func TestFils_OrigineNavigateur_Refusee_MemeSigne(t *testing.T) {
 	assert.Empty(t, st.fils)
 	// Témoin : le même appel sans en-tête de navigateur passe.
 	assert.Equal(t, 200, put(t, mux, session1, hubUser, hubTenant, []any{}).Code)
+}
+
+// Le Hub appelle avec le fetch de Node (undici), qui ajoute de lui-même Sec-Fetch-Mode: cors. Mesuré le 27/11 (cas 56 du Hub, 403 à
+// 00:59:44Z) : un appel signé du Hub portant cet en-tête seul doit passer, sinon le fil n'est jamais rangé.
+func TestFils_HubAvecSecFetchModeSeul_Passe(t *testing.T) {
+	mux, st := serveur(t)
+	corps, _ := json.Marshal(map[string]any{"hub_user_id": hubUser, "tenant_id": hubTenant, "messages": []any{map[string]any{"id": "m1", "role": "user", "parts": []any{}}}})
+	r := signe(http.MethodPut, "/api/hub/ia/fils/"+session1, corps)
+	r.Header.Set("Sec-Fetch-Mode", "cors")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, r)
+	assert.Equal(t, 200, rec.Code, rec.Body.String())
+	assert.Len(t, st.fils, 1)
 }
 
 func TestFils_PutPuisGet_MemesMessages_TelsQuels(t *testing.T) {

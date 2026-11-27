@@ -125,3 +125,9 @@ Pièges relevés :
 - Un id d'automation supprimée reste occupé (`already_exists`) : l'id de séquence est suffixé à chaque passage.
 - `nomad alloc logs` répond 403 à ce jeton : lire les journaux prod par `obs logs notifuse --env prod --regex ...` (un `grep -c` sur le 403 compte 0, mesure aveugle).
 - 27/11 : l'E2E staging de la CI a démarré pendant la bascule de l'allocation (redirect count exceeded) ; la chaîne attend désormais une staging saine (main).
+
+**Objet de message.sent (27/11)** : lu dans `message_history` (`channel_options.subject`, sinon `message_data.metadata.veridian_subject`).
+L'objet rendu est désormais consigné pour TOUS les envois : transactionnel et API (`internal/service/veridian_history_subject.go`,
+une ligne dans `email_service.go`) et toutes les sources de la file (`queue/veridian_sent_subject.go`, une ligne dans `worker.go`).
+Avant, seules les automations l'avaient : la ligne du CRM d'un envoi transactionnel s'affichait « Untitled ». Dans `message.received`
+(webhook), `data.email` est le contact RATTACHÉ, `data.from` l'expéditeur réel ; dans un lot, `from_email`.

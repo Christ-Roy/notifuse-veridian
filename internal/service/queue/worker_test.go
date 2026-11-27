@@ -2659,8 +2659,9 @@ func TestEmailQueueWorker_HandleError_RetryableAttemptIsJournaledAsSendError(t *
 	assert.Equal(t, domain.VeridianReasonSendError, log.rows[0].Reason)
 }
 
-// L'objet réellement envoyé est consigné dans l'historique (clé veridian_subject) : c'est lui
-// que les relances reprendront. Seulement pour les automations, seulement sur succès.
+// L'objet réellement envoyé est consigné dans l'historique (clé veridian_subject) : les relances le
+// reprennent, et l'activité Mail vers le Hub le met dans message.sent (§5.25). Toutes les sources (avant
+// le 27/11, automations seulement : une campagne partait sans objet), seulement sur succès.
 func TestEmailQueueWorker_UpsertMessageHistory_RecordsSentSubject(t *testing.T) {
 	env := newVeridianThrottleTestEnv(t)
 	entry := veridianTestAutomationEntry("j0", "auto-1", "lead@exemple.fr", threadSender)
@@ -2688,6 +2689,21 @@ func TestEmailQueueWorker_UpsertMessageHistory_RecordsSentSubject(t *testing.T) 
 	env.worker.upsertMessageHistory(context.Background(), "ws-1", "secret", entry, errors.New("smtp 421"))
 	require.NotNil(t, saved)
 	assert.Nil(t, saved.MessageData.Metadata)
+
+	// Une campagne aussi (27/11) : sans cela, message.sent d'un broadcast partait sans subject.
+	campagne := veridianTestAutomationEntry("j0", "auto-1", "lead@exemple.fr", threadSender)
+	campagne.SourceType = domain.EmailQueueSourceBroadcast
+	campagne.Payload.Subject = "Nouveautés de novembre"
+	saved = nil
+	env.mockMessageHistoryRepo.EXPECT().
+		Upsert(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ string, m *domain.MessageHistory) error {
+			saved = m
+			return nil
+		})
+	env.worker.upsertMessageHistory(context.Background(), "ws-1", "secret", campagne, nil)
+	require.NotNil(t, saved)
+	assert.Equal(t, "Nouveautés de novembre", saved.MessageData.Metadata[veridianMetadataSubjectKey])
 }
 
 // Veridian (12/10/2026) : une relance dont le J0 a ete refuse ne part jamais (porte placee au debut de

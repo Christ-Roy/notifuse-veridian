@@ -525,6 +525,7 @@ func (s *EmailService) SendEmailForTemplate(ctx context.Context, request domain.
 	if request.TransactionalNotificationID != nil {
 		messageHistory.VeridianMessageType = domain.VeridianMessageTypeTransactional
 	}
+	veridianRecordHistorySubject(messageHistory, subject) // Veridian : objet rendu pour message.sent (§5.25), veridian_history_subject.go
 
 	// Save to message history
 	if err := s.messageRepo.Create(ctx, request.WorkspaceID, workspace.Settings.SecretKey, messageHistory); err != nil {

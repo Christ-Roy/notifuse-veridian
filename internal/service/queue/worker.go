@@ -3,7 +3,6 @@ package queue
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -565,14 +564,8 @@ func (w *EmailQueueWorker) upsertMessageHistory(
 		VeridianProfileID: entry.IntegrationID,
 	}
 
-	// Veridian fork (12/10/2026) : l'objet reellement envoye est consigne pour que les
-	// relances d'une sequence puissent reprendre "Re: <objet du premier mail>" sans
-	// re-rendre un modele qui aurait pu changer. Automations seulement.
-	if entry.SourceType == domain.EmailQueueSourceAutomation && sendErr == nil && strings.TrimSpace(entry.Payload.Subject) != "" {
-		message.MessageData.Metadata = map[string]interface{}{
-			veridianMetadataSubjectKey: entry.Payload.Subject,
-		}
-	}
+	// Veridian fork : l'objet reellement envoye est consigne (relances « Re: », activite Mail vers le Hub). veridian_sent_subject.go
+	veridianRecordSentSubject(message, entry, sendErr)
 
 	// Lot 4 : un mail transactionnel n'est pas attribue a une adresse emettrice ni a
 	// une classe de destinataire (aucun compteur commercial ne doit le voir), et

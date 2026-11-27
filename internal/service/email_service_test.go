@@ -1035,7 +1035,10 @@ func TestEmailService_SendEmailForTemplate(t *testing.T) {
 				assert.Equal(t, contact.Email, msgHistory.ContactEmail)
 				assert.Equal(t, templateConfig.TemplateID, msgHistory.TemplateID)
 				assert.Equal(t, "email", msgHistory.Channel)
-				assert.Equal(t, messageData, msgHistory.MessageData)
+				assert.Equal(t, messageData.Data, msgHistory.MessageData.Data)
+				// Veridian (27/11/2026) : l'objet rendu est consigné dans la métadonnée (veridian_history_subject.go),
+				// lu par l'outbox de l'activité Mail pour message.sent (§5.25).
+				assert.Equal(t, "Welcome to Our Service", msgHistory.MessageData.Metadata[veridianHistorySubjectKey])
 				// TransactionalNotificationID should be nil when not set in request
 				assert.Nil(t, msgHistory.TransactionalNotificationID)
 				// Correctif 2026-09-29 : sent_at n'est plus posé à la création,

@@ -40,3 +40,7 @@ Un seul point d'entrée IA dans l'en-tête : la marque `[data-mon-ia]`. L'ancien
 `WorkspaceLayout.tsx` ; son contenu (installation par assistant, adresse MCP, commande Claude Code, révocation) est dans la carte `sans_moteur`, sous le
 lien « Relier mon IA » (fiche `83`). Garde : `veridian_layout_memo.test.tsx` échoue si l'en-tête le rend de nouveau.
 
+
+**Origine navigateur (27/11)** : les fils refusent `Origin`, `Sec-Fetch-Site` et `Sec-Fetch-Dest`, jamais `Sec-Fetch-Mode` seul. Le fetch de
+Node (undici), dont se sert le Hub, l'ajoute de lui-même : le cas 56 du Hub a pris 403 sur son PUT à 00:59:44Z. Test
+`TestFils_HubAvecSecFetchModeSeul_Passe`, vu échouer avec l'ancienne garde.

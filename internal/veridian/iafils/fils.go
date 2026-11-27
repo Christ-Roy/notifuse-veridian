@@ -45,11 +45,13 @@ func refuse(w http.ResponseWriter, status int, code string) {
 	writeJSON(w, status, map[string]any{"code": code, "error": code})
 }
 
-// RefuseBrowser : ces routes ne sont appelées que par le Hub, serveur à serveur. Un navigateur met toujours Sec-Fetch-* (et Origin hors
-// GET de même origine) : leur seule présence suffit à refuser, même signé. Pose dehors de la signature.
+// RefuseBrowser : ces routes ne sont appelées que par le Hub, serveur à serveur. Un navigateur met Origin (hors GET de même origine),
+// Sec-Fetch-Site et Sec-Fetch-Dest : leur présence suffit à refuser, même signé. Jamais Sec-Fetch-Mode seul : le fetch de Node (undici),
+// dont se sert le Hub, l'ajoute de lui-même (« cors ») ; le 27/11 à 00:59:44Z, le cas 56 du Hub a pris 403 browser_origin_refused sur
+// son PUT de fil à cause de lui. La signature v2 à usage unique reste la vraie garde. Pose dehors de la signature.
 func RefuseBrowser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Site") != "" || r.Header.Get("Sec-Fetch-Mode") != "" || r.Header.Get("Sec-Fetch-Dest") != "" {
+		if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Site") != "" || r.Header.Get("Sec-Fetch-Dest") != "" {
 			refuse(w, http.StatusForbidden, "browser_origin_refused")
 			return
 		}
