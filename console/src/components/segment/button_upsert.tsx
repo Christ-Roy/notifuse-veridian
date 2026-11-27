@@ -19,6 +19,7 @@ import { debounce } from 'lodash'
 import { useParams } from '@tanstack/react-router'
 import { useAuth } from '../../contexts/AuthContext'
 import { TreeNodeInput, HasLeaf } from './input'
+import { useLiveSegmentCount } from './veridian_live_count'
 import { useQuery } from '@tanstack/react-query'
 import { listsApi } from '../../services/api/list'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -145,41 +146,19 @@ const DrawerSegment = (props: {
     return null
   }, [workspaceId, workspaces])
 
-  // Compte en direct pendant l'édition (reprise amont 37.0) : chaque changement de l'arbre relance
-  // l'aperçu après une pause. Pendant le calcul, le dernier compte reste affiché ; une condition encore
-  // incomplète (erreur serveur) ne l'efface pas non plus.
+  // Compte en direct pendant l'édition (reprise amont 37.0) : logique dans veridian_live_count.ts
   const liveTree = Form.useWatch('tree', form) as TreeNode | undefined
-  const liveKey = JSON.stringify(liveTree ?? null)
+  const live = useLiveSegmentCount(liveTree, workspaceId, HasLeaf(liveTree))
   useEffect(() => {
-    if (!workspaceId || !HasLeaf(liveTree)) return
-    const requestData: PreviewSegmentRequest = {
-      workspace_id: workspaceId,
-      tree: liveTree as TreeNode,
-      limit: 100
-    }
-    const key = JSON.stringify(requestData)
-    let cancelled = false
-    setLoadingPreview(true)
-    const timer = setTimeout(async () => {
-      try {
-        const res = await previewSegment(requestData)
-        if (cancelled) return
-        setPreviewResponse(res)
-      } catch {
-        // Condition incomplète : on garde le dernier compte affiché
-      } finally {
-        if (!cancelled) {
-          setPreviewedData(key)
-          setLoadingPreview(false)
-        }
-      }
-    }, 800)
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seul l'arbre déclenche le calcul
-  }, [liveKey, workspaceId])
+    if (live.response) setPreviewResponse(live.response)
+  }, [live.response])
+  useEffect(() => {
+    if (live.requestKey) setPreviewedData(live.requestKey)
+  }, [live.requestKey])
+  useEffect(() => {
+    if (live.pending) setLoadingPreview(true)
+    else setLoadingPreview(false)
+  }, [live.pending])
 
   // Auto-preview when editing an existing segment
   useEffect(() => {
