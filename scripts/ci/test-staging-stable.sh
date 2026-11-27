@@ -25,11 +25,21 @@ http.createServer((q, r) => {
   rep(404, '404 page not found', 'text/plain')
 }).listen(port, '127.0.0.1')
 FIN_SERVEUR
+# 27/11 : sur le runner JIT, le cas « sain » rendait rc 1 (« version injoignable ») : le faux serveur n'était pas joint
+# (proxy de l'environnement ou démarrage lent). Les cas « redirige » et « bascule » passaient alors À VIDE. Désormais :
+# aucun proxy pour la boucle locale, et le serveur doit RÉPONDRE (200 sur /api/version en mode sain) avant tout jugement,
+# sinon NON ABOUTI (rc 2), jamais un vert ni un rouge de complaisance.
+export NO_PROXY="127.0.0.1,localhost${NO_PROXY:+,$NO_PROXY}" no_proxy="127.0.0.1,localhost${no_proxy:+,$no_proxy}"
+unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy ALL_PROXY all_proxy
 echec=0
 cas() { # cas <mode> <rc attendu>
-  local port=$((20000 + RANDOM % 20000))
+  local port=$((20000 + RANDOM % 20000)) pret=0
   node "$TMP/srv.js" "$port" "$1" & PID=$!
-  for _ in 1 2 3 4 5 6 7 8 9 10; do curl -s -o /dev/null "http://127.0.0.1:$port/" && break; sleep 0.2; done
+  for _ in $(seq 1 50); do
+    curl -s --noproxy '*' -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/console/" 2>/dev/null | grep -qE '^(200|302)$' && { pret=1; break; }
+    sleep 0.2
+  done
+  if [ "$pret" != 1 ]; then echo "NON ABOUTI : faux serveur injoignable sur 127.0.0.1:$port (mode $1)"; kill "$PID" 2>/dev/null; exit 2; fi
   STABLE_N=4 STABLE_PAS=0.2 STABLE_BORNE=4 "$HERE/staging-stable.sh" "http://127.0.0.1:$port" abcdef12 >"$TMP/out" 2>&1; rc=$?
   kill "$PID" 2>/dev/null; wait "$PID" 2>/dev/null
   if [ "$rc" = "$2" ]; then echo "OK   $1 -> rc $rc"; else echo "ROUGE $1 -> rc $rc (attendu $2)"; tail -3 "$TMP/out"; echec=1; fi

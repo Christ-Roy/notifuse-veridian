@@ -1074,7 +1074,10 @@ jobs:
           # la bascule d'allocation ; l'E2E prenait « Failed to fetch » et « redirect count exceeded ». 6 lectures saines
           # consécutives, sans redirection (SHA, setup.status, une route /api, la console), bornées à 3 min.
           chmod +x scripts/ci/staging-stable.sh scripts/ci/test-staging-stable.sh
-          scripts/ci/test-staging-stable.sh
+          # Autotest de la garde : rc 1 (la garde se trompe) bloque ; rc 2 (faux serveur local injoignable sur ce runner)
+          # prévient sans bloquer, la vraie garde ci-dessous s'applique de toute façon.
+          rc=0; scripts/ci/test-staging-stable.sh || rc=$?
+          if [ "$rc" = 2 ]; then echo "::warning::autotest de staging-stable NON ABOUTI sur ce runner (rc 2)"; elif [ "$rc" != 0 ]; then exit "$rc"; fi
           scripts/ci/staging-stable.sh https://notifuse.staging.veridian.site "$EXPECTED_SHA"
       - name: Resolve staging DB container (Nomad alloc)
         run: |

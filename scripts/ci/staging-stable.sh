@@ -18,6 +18,8 @@ BASE="${1:-}"; SHA="${2:-}"
 [ -n "$BASE" ] && [ -n "$SHA" ] || { echo "usage : staging-stable.sh <base_url> <sha_attendu>" >&2; exit 2; }
 N="${STABLE_N:-6}"; PAS="${STABLE_PAS:-5}"; BORNE="${STABLE_BORNE:-180}"
 C=(curl -sS --max-time 10 --max-redirs 0)
+# Boucle locale (épreuve) : jamais par un proxy.
+case "$BASE" in http://127.0.0.1*|http://localhost*) C+=(--noproxy "*") ;; esac
 
 lecture() {
   local v s code type console

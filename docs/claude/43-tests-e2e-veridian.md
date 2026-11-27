@@ -11,4 +11,4 @@ read-only autorisés à tourner sur prod.
 5 s, bornées à 3 min. Un seul échec remet le compteur à zéro. Pourquoi : le run 45912109689 démarrait l'E2E 37 s après la fin du
 déploiement, pendant que l'ancienne allocation se vidait. Une seule lecture du bon SHA passait, puis « Failed to fetch » et
 « redirect count exceeded » (infra, journaux Sablier sans expiration ni réveil). Épreuve : `scripts/ci/test-staging-stable.sh`
-(faux serveur Node : redirection, bascule, sain), jouée avant la garde ; vue rouge sur la remise à zéro retirée.
+(faux serveur Node : redirection, bascule, sain), jouée avant la garde ; vue rouge sur la remise à zéro retirée. 27/11 : le faux serveur doit répondre avant tout jugement (sinon rc 2, sans proxy pour 127.0.0.1) ; sur le runner, les cas rouges passaient à vide.
