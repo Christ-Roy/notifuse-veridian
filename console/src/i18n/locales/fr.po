@@ -3784,7 +3784,7 @@ msgstr "Jours"
 #: src/components/prospection/veridian_prospection_dashboard.tsx
 #: src/components/prospection/veridian_prospection_stock.tsx
 msgid "Days of coverage"
-msgstr "Jours de couverture"
+msgstr "Jours avant épuisement"
 
 #: src/components/sending_profiles/veridian_profile_advanced.tsx
 msgid "Days per step"
@@ -4079,7 +4079,7 @@ msgstr "Exclusions volontaires (adresse invalide, classe de fournisseur exclue) 
 
 #: src/components/analytics/EmailMetricsChart.tsx
 msgid "Deliberately excluded"
-msgstr "Exclus volontairement"
+msgstr "Exclus par règle"
 
 #: src/components/templates/TemplatePreviewDrawer.tsx
 msgid "Deliverability"
@@ -10207,7 +10207,7 @@ msgstr "Plafond de sécurité du profil ({cap})"
 
 #: src/components/prospection/veridian_prospection_dashboard.tsx
 msgid "Profiles in rotation"
-msgstr "Profils en rotation"
+msgstr "Profils utilisés en alternance"
 
 #: src/pages/SendingProfilesPage.tsx
 msgid "Profiles used by campaigns and sequences. Those in the rotation share the volume."
@@ -10419,7 +10419,7 @@ msgstr "Prêt à utiliser"
 
 #: src/components/analytics/EmailMetricsChart.tsx
 msgid "Real failures"
-msgstr "Échec réel"
+msgstr "Échecs à corriger"
 
 #: src/components/prospection/veridian_prospection_reputation.tsx
 #: src/components/send_queue/veridian_queue_decisions.tsx
@@ -12117,7 +12117,7 @@ msgstr "Envoyés aujourd'hui"
 
 #: src/components/prospection/veridian_prospection_dashboard.tsx
 msgid "Sent today / effective cap"
-msgstr "Envoyés aujourd'hui / plafond effectif"
+msgstr "Envoyés aujourd'hui / limite du jour"
 
 #~ msgid "Sent today by the rotation profiles, over today's capacity."
 #~ msgstr "Envoyés aujourd'hui par les profils en rotation, sur la capacité du jour."
@@ -14122,7 +14122,7 @@ msgstr "Aujourd'hui"
 
 #: src/components/prospection/veridian_prospection_sends.tsx
 msgid "Today / effective cap"
-msgstr "Aujourd'hui / plafond effectif"
+msgstr "Aujourd'hui / limite du jour"
 
 #~ msgid "Today's usage is unavailable"
 #~ msgstr "L'usage du jour est indisponible"
@@ -14518,12 +14518,12 @@ msgstr "Brouillon non enregistré trouvé."
 
 #: src/components/lists/ListStats.tsx
 msgid "Unsub"
-msgstr "Désab."
+msgstr "Désinscrits"
 
 #: src/components/analytics/EmailMetricsChart.tsx
 #: src/components/broadcasts/BroadcastStats.tsx
 msgid "Unsub."
-msgstr "Désab."
+msgstr "Désinscrits"
 
 #: src/pages/TemplatesPage.tsx
 msgid "Unsubscribe"
