@@ -304,11 +304,12 @@ VERIDIAN_BOX_SMTP_TRUSTED_PROXIES=172.26.64.1/32,100.88.202.29/32
 VERIDIAN_MX_DOMAINS=messagerie-nord-776.fr=robertbrunon
 # CSP de la console (VER-265, fiche 96) : report = Content-Security-Policy-Report-Only, enforce = bloquante, off = aucune.
 VERIDIAN_CSP_MODE=enforce
-# Activité Mail vers le Hub par lots (CONTRAT-HUB §5.25, fiche 98). Le Hub sert /lot depuis le 26/11 21:44Z, ouvert à ses seules orgs
-# de test : l'envoi est allumé pour l'org jetable de l'épreuve SEULE (VERIDIAN_ACTIVITE_WORKSPACES) ; les autres espaces gardent leur
-# file (7 jours, 100 000 au plus), rien ne part. Ouvrir à tous = vider VERIDIAN_ACTIVITE_WORKSPACES, quand le Hub ouvre la liaison.
+# Activité Mail vers le Hub par lots (CONTRAT-HUB §5.25, fiche 98). Liste blanche d'espaces (virgules) : 27/11, l'org Veridian de
+# Robert (robertbrunon, tenant 359b76d5, CRM veridian-4) pour VER-267 ; l'org jetable e2esso5yd8jj8ljzwxtr, démontée, en est sortie.
+# Rien n'entre en file sans l'abonnement du Hub ; un espace hors liste garde sa file (7 jours, 100 000 au plus), rien ne part.
+# Ouvrir à tous = vider VERIDIAN_ACTIVITE_WORKSPACES, sur décision (fiche 98, « Ouvrir à toutes les orgs »).
 VERIDIAN_ACTIVITE_ENABLED=true
-VERIDIAN_ACTIVITE_WORKSPACES=e2esso5yd8jj8ljzwxtr
+VERIDIAN_ACTIVITE_WORKSPACES=robertbrunon
 VERIDIAN_ACTIVITE_METRICS_PORT=9464
 VERIDIAN_MX_HOST=mx.veridian.site
 SMTP_BRIDGE_TLS=starttls
