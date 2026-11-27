@@ -1,8 +1,9 @@
 /**
  * Veridian : installation du connecteur MCP, contenu de la carte « Relier mon IA » (veridian_mon_ia.tsx, VER-203 : un seul
  * point d'entrée IA dans l'en-tête, l'ancien bouton « Brancher mon IA » n'existe plus). Installation par assistant, adresse MCP
- * à copier, commande Claude Code, lien de révocation. Les liens viennent du Hub (voir lib/veridian_connect_ai). Si le Hub ne
- * répond pas : message et adresse MCP à copier, jamais de bouton mort. Mode veridian-managed seulement. Fiche 83.
+ * à copier, commande Claude Code (CONTRAT-HUB §5.24.1) ; le lien vers le Hub (/dashboard/ia, révocation comprise) est celui de la carte.
+ * Les liens viennent du Hub (voir lib/veridian_connect_ai), jamais en dur. Lecture impossible : rien ici, la carte garde son texte et
+ * son lien, jamais de bouton mort. Mode veridian-managed seulement. Fiche 83.
  */
 
 import { Button, Space, Typography, message } from 'antd'
@@ -10,12 +11,7 @@ import { CopyOutlined } from '@ant-design/icons'
 import { useLingui } from '@lingui/react/macro'
 import { useQuery } from '@tanstack/react-query'
 import { veridianApi, type VeridianModeResponse } from '../services/api/veridian'
-import {
-  VERIDIAN_MCP_FALLBACK_URL,
-  VERIDIAN_MCP_REVOKE_URL,
-  fetchInstallLinks,
-  type InstallLinks
-} from '../lib/veridian_connect_ai'
+import { fetchInstallLinks, type InstallLinks } from '../lib/veridian_connect_ai'
 
 async function copy(text: string, okMessage: string) {
   try {
@@ -36,7 +32,7 @@ export function VeridianInstallLinks() {
     retry: false
   })
   const managed = mode?.mode === 'veridian-managed'
-  const { data: links, isFetched } = useQuery<InstallLinks | null>({
+  const { data: links } = useQuery<InstallLinks | null>({
     queryKey: ['veridian', 'mcp-install-links'],
     queryFn: () => fetchInstallLinks(),
     enabled: managed,
@@ -44,16 +40,15 @@ export function VeridianInstallLinks() {
     retry: false
   })
 
-  if (!managed) return null
+  if (!managed || !links || links.assistants.length === 0) return null
 
-  const address = links?.url ?? VERIDIAN_MCP_FALLBACK_URL
-  const unavailable = isFetched && (!links || links.assistants.length === 0)
+  const address = links.url
 
   return (
     <div data-testid="veridian-connect-ai">
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
         <Typography.Text strong>{t`Connect it to your assistant`}</Typography.Text>
-        {links?.assistants.map((a) => (
+        {links.assistants.map((a) => (
           <div key={a.cle}>
             <Button type="primary" href={a.installation} target="_blank" rel="noopener noreferrer" block>
               {a.libelle}
@@ -66,12 +61,6 @@ export function VeridianInstallLinks() {
           </div>
         ))}
 
-        {unavailable && (
-          <Typography.Text type="warning" data-testid="veridian-connect-ai-fallback">
-            {t`The install buttons are temporarily unavailable. Add this address as an MCP server in your assistant:`}
-          </Typography.Text>
-        )}
-
         <div>
           <Typography.Text type="secondary">{t`MCP address`}</Typography.Text>
           <Space.Compact style={{ width: '100%' }}>
@@ -82,7 +71,7 @@ export function VeridianInstallLinks() {
           </Space.Compact>
         </div>
 
-        {links?.claudeCode && (
+        {links.claudeCode && (
           <div>
             <Typography.Text type="secondary">{t`Claude Code`}</Typography.Text>
             <Space.Compact style={{ width: '100%' }}>
@@ -96,10 +85,6 @@ export function VeridianInstallLinks() {
             </Space.Compact>
           </div>
         )}
-
-        <Typography.Link href={VERIDIAN_MCP_REVOKE_URL} target="_blank" rel="noopener noreferrer">
-          {t`Manage or revoke AI access`}
-        </Typography.Link>
       </Space>
     </div>
   )

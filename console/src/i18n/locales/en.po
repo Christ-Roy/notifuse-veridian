@@ -7839,8 +7839,8 @@ msgid "Makes the wrapper span the entire email viewport width, ignoring containe
 msgstr "Makes the wrapper span the entire email viewport width, ignoring container constraints (typically 600px). Useful for full-bleed backgrounds and hero sections."
 
 #: src/components/veridian_connect_ai.tsx
-msgid "Manage or revoke AI access"
-msgstr "Manage or revoke AI access"
+#~ msgid "Manage or revoke AI access"
+#~ msgstr "Manage or revoke AI access"
 
 #: src/components/settings/veridian_plan_settings.tsx
 #: src/components/veridian_brand_footer.tsx
@@ -13373,8 +13373,8 @@ msgid "The inbox is temporarily unavailable"
 msgstr "The inbox is temporarily unavailable"
 
 #: src/components/veridian_connect_ai.tsx
-msgid "The install buttons are temporarily unavailable. Add this address as an MCP server in your assistant:"
-msgstr "The install buttons are temporarily unavailable. Add this address as an MCP server in your assistant:"
+#~ msgid "The install buttons are temporarily unavailable. Add this address as an MCP server in your assistant:"
+#~ msgstr "The install buttons are temporarily unavailable. Add this address as an MCP server in your assistant:"
 
 #: src/components/settings/veridian_mailbox_setup.tsx
 msgid "The link works until {until}."

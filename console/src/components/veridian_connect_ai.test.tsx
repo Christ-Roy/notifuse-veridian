@@ -4,7 +4,7 @@ import { i18n } from '@lingui/core'
 import { I18nProvider } from '@lingui/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { VeridianInstallLinks } from './veridian_connect_ai'
-import { fetchInstallLinks, sanitizeInstallLinks, VERIDIAN_MCP_FALLBACK_URL } from '../lib/veridian_connect_ai'
+import { fetchInstallLinks, sanitizeInstallLinks } from '../lib/veridian_connect_ai'
 
 i18n.loadAndActivate({ locale: 'en', messages: {} })
 
@@ -88,17 +88,17 @@ describe('VeridianInstallLinks', () => {
     expect(claude.closest('a')?.getAttribute('href')).toContain('claude.ai/customize/connectors')
     expect(screen.getByText('Activez le mode développeur.')).toBeTruthy()
     expect(screen.queryByText('Piège')).toBeNull()
-    expect(screen.queryByTestId('veridian-connect-ai-fallback')).toBeNull()
   })
 
-  it("si le Hub ne répond pas : repli propre avec l'adresse à copier, aucun bouton mort", async () => {
+  it("si le Hub ne répond pas : rien, ni bouton mort ni adresse en dur (la carte garde son texte et son lien)", async () => {
     vi.mocked(veridianApi.getMode).mockResolvedValue({ mode: 'veridian-managed', signin_url: '/x', hub_url: 'https://app.veridian.site' })
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('hub down')))
-    renderIt()
-    await screen.findByTestId('veridian-connect-ai')
-    expect(await screen.findByTestId('veridian-connect-ai-fallback')).toBeTruthy()
-    expect(screen.getByText(VERIDIAN_MCP_FALLBACK_URL)).toBeTruthy()
-    expect(screen.queryByText('Ajouter à Claude')).toBeNull()
+    const f = vi.fn().mockRejectedValue(new Error('hub down'))
+    vi.stubGlobal('fetch', f)
+    const { container } = renderIt()
+    await waitFor(() => expect(f).toHaveBeenCalled())
+    await new Promise((r) => setTimeout(r, 30))
+    expect(container.querySelector('button, a')).toBeNull()
+    expect(screen.queryByTestId('veridian-connect-ai')).toBeNull()
   })
 
   it('le contenu est en anglais dans la console anglaise (plus de français)', async () => {
@@ -106,7 +106,6 @@ describe('VeridianInstallLinks', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => HUB_RESPONSE }))
     renderIt()
     expect(await screen.findByText('MCP address')).toBeTruthy()
-    expect(screen.getByText('Manage or revoke AI access')).toBeTruthy()
     expect(screen.queryByText('Adresse MCP')).toBeNull()
     expect(screen.queryByText('Brancher mon IA')).toBeNull()
   })

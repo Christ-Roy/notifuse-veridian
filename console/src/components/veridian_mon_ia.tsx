@@ -100,11 +100,11 @@ export function VeridianMonIA({ workspaceId }: { workspaceId: string | undefined
           <Typography.Paragraph>
             {t`Votre IA travaille dans vos apps Veridian depuis son propre écran (Claude, ChatGPT, Mistral…) : reliez-la une fois, sans clé.`}
           </Typography.Paragraph>
+          <VeridianInstallLinks />
+          <Divider />
           <Button type="primary" href={relier} target="_blank" rel="noopener noreferrer">
             {t`Relier mon IA`}
           </Button>
-          <Divider />
-          <VeridianInstallLinks />
         </div>
       </Modal>
     </span>

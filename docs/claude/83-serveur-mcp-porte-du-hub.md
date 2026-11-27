@@ -43,10 +43,12 @@ Contrat : `veridian-hub/docs/CONTRAT-MCP.md` (09/11/2026). Code : `internal/veri
 
 Le bouton « Brancher mon IA » de l'en-tête n'existe plus : l'en-tête n'a qu'un point d'entrée IA, la marque `data-mon-ia` (fiche `99`). Son contenu
 (`VeridianInstallLinks`, `components/veridian_connect_ai.tsx`) est dans la carte `[data-carte="relier-mon-ia"]`, sous le lien « Relier mon IA », donc
-seulement quand le Hub dit `sans_moteur` : boutons par assistant (Claude, ChatGPT, Cursor, VS Code), adresse MCP à copier, commande Claude Code, lien de
-révocation. Mode `veridian-managed` seulement. Les liens sont lus au Hub (`GET https://app.veridian.site/api/mcp/liens-installation?app=notifuse`, publique,
-CORS ouvert, cache 5 min) par `lib/veridian_connect_ai.ts` : rien n'est recopié. Réponse validée (schémas https:, cursor:, vscode: seulement, entrées
-incomplètes écartées). Hub muet (4 s) ou réponse illisible : message et adresse MCP à copier, aucun bouton mort.
+seulement quand le Hub dit `sans_moteur`, dans l'ordre du CONTRAT-HUB §5.24.1 : un bouton par assistant (Claude, ChatGPT, Cursor, VS Code ; `etape`
+affichée quand elle n'est pas nulle), l'adresse MCP à copier (`url`), la commande Claude Code (`claudeCode`), puis le lien « Relier mon IA » vers
+`{HUB}/dashboard/ia` (révocation et liste des IA reliées restent au Hub, jamais ici). Mode `veridian-managed` seulement. Les liens sont lus au Hub
+(`GET https://app.veridian.site/api/mcp/liens-installation?app=notifuse`, publique, CORS ouvert, cache 5 min) par `lib/veridian_connect_ai.ts` : rien
+n'est recopié, aucune adresse en dur affichée. Réponse validée (schémas https:, cursor:, vscode: seulement, entrées incomplètes écartées). Lecture
+impossible (Hub muet 4 s, réponse illisible) : la carte garde son texte et son lien, sans boutons ni adresse.
 Libellés : msgid en anglais (la langue source du catalogue est `en`), traduits dans `fr.po` ; un msgid français restait français dans la console anglaise
 (constaté en prod le 27/11). Tests : `veridian_connect_ai.test.tsx`, `veridian_mon_ia.test.tsx` (la carte porte l'installation), `veridian_layout_memo.test.tsx`
 (l'en-tête ne rend plus le bouton ; vu échouer par sabotage).
