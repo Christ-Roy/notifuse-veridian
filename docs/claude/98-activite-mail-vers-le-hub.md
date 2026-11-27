@@ -138,3 +138,8 @@ Envoi 01:55:45Z (message `8d5f4405-d75e-4afd-a668-842bd62547e1`) : `message_data
 Réponse de `parcours-trois-lot2611@` « Camille Épreuve-Deux » reçue 01:56:29Z, message `2189918e-9981-4a88-9f01-30ff574057bb` (`mail:get` : « De : Camille Épreuve-Deux »).
 Lots : 01:55:58Z `d60f8474-991e-430d-81d7-b0735ac3053b` (1 événement), 01:56:48Z `67df2f92-d930-4370-a7f7-994313d3428a` (2), Hub 200 acceptes 1 et 2, doublons 0, ignores 0.
 Métriques (alloc 32c63e00) : `events_total{accepte}` 0 puis 3, `lots_total{accepte}` 0 puis 2. Le corps des lots reste illisible (pas de SQL) : le `from_name` livré au Hub n'est pas vu ici.
+Le Hub a confirmé le nom au CRM (nouvelle fiche, objet visible) ; la livraison webhook de 01:56:29Z porte `from_name` « Camille Épreuve-Deux ».
+
+**Mail interne au même espace (27/11, tranché avec le Hub)** : la réponse de `parcours-trois` part d'une boîte DU MÊME espace (`mail:reply`).
+Elle produit donc deux faits vrais : un `message.sent` (envoi de la boîte, avec le Message-ID de la réponse) et un reçu côté `parcours-boite`.
+Aucun filtre, aucun champ `interne: true` tant qu'aucun consommateur ne le lit ; le CRM s'en garde lui-même (garde 0.7.8).
