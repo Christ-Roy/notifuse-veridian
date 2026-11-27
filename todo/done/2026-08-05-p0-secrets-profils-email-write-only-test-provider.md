@@ -1,5 +1,7 @@
 # P0 sécurité - Secrets email write-only et endpoint de test non rejouable
 
+> **CLOS le 27/11/2026, relevé du code servi en prod** : ciphertext venu du navigateur refusé sans déchiffrement (`email_service.go:122`, test `email_service_test.go:413`) ; test d'une intégration réservé au propriétaire ou à l'admin d'espace (`TestEmailService_TestEmailProviderByIntegrationIDRequiresOwner`, `..._AdminPasseLeControle`) ; limite de débit dédiée (`TestEmailHandler_TestProviderDedicatedRateLimit`) ; aucune réponse workspace ne porte de secret ni de ciphertext (`TestVeridianRedactWorkspaceForAPI_AllSecretsWithoutRuntimeMutation`, `TestWorkspaceHandlerRedactsOnWriteEndpoints`, règle 9) ; update sans mot de passe conserve le secret (`veridian_email_provider_secrets_test.go`).
+
 > **Sévérité** : 🔴 P0 sécurité
 > **Surface** : API workspace, console, test SMTP
 > **Statut 2026-08-05** : livré localement, avec redaction exhaustive workspace et conservation serveur des secrets write-only

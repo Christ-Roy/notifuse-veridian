@@ -1,5 +1,7 @@
 # GenerateMagicLink — vérifier le membership (defense-in-depth)
 
+> **CLOS le 27/11/2026, relevé du code** : `magicLinkMember` (`internal/service/veridian_hub_member.go:136`) refuse un non-membre de l'espace (`GetUserWorkspace`, sinon « user is not a member of this workspace », 404), et une personne du Hub ne se désigne plus par son adresse (`ErrHubUserIDRequired`, fiche 89). Test : `veridian_service_test.go:985`, « une clé d'espace n'ouvre pas quelqu'un d'un autre espace ».
+
 > **Sévérité** : 🟢 P3 (durcissement, PAS un trou exploitable)
 > **Owner** : agent notifuse-veridian
 > **Créé** : 2026-06-23 (trouvé en audit HUNT axe 1 sécu API)

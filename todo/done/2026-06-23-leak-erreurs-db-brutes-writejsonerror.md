@@ -1,5 +1,7 @@
 # Leak d'erreurs internes brutes au client sur les 500 (err.Error() → WriteJSONError)
 
+> **CLOS le 27/11/2026, relevé du code** : aucun 500 ne renvoie plus `err.Error()` dans `internal/http/veridian_*.go` ni `internal/veridian/`, sauf `veridian_cold_simulate_handler.go`, route de diagnostic réservée à la staging (503 hors staging) et derrière HMAC, gardée telle quelle. Les 27 `WriteJSONError(..., err.Error(), 4xx)` restants portent des erreurs de validation ou des sentinelles métier (`ErrCannotFreezeOwner`, `ErrFrozenMemberRepoNotConfigured`…), pas d'erreur PostgreSQL brute.
+
 > **Sévérité** : 🟢 P2 (HMAC/admin only, caller de confiance ; leak = noms de tables/schéma DB, PAS de credentials)
 > **Owner** : agent notifuse
 > **Créé** : 2026-06-23

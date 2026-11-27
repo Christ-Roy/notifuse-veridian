@@ -1,5 +1,7 @@
 # POST /api/veridian/admin/test-tenants-stats tombe dans le catchall SPA (200 body vide)
 
+> **CLOS le 27/11/2026, mesuré en prod** : `POST /api/veridian/admin/test-tenants-stats` → 404 `application/json` (110 o), `GET` sans HMAC → 401 JSON, toute route `/api/veridian/admin/*` inconnue en POST → 404 JSON. Plus de 200 vide du catchall SPA.
+
 > **Sévérité** : 🔵 P3 (robustesse, PAS un trou de sécu — read-only, non-destructif)
 > **Owner** : agent notifuse
 > **Créé** : 2026-06-19
