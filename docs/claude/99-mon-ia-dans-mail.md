@@ -33,3 +33,10 @@ migration V87 (`veridian_ia_fils`), console `components/veridian_mon_ia.tsx` + `
 - Le texte de la carte est celui du contrat, tel quel (il dit « sans clé » : on ne propose jamais de champ ni de saisie de clé).
 - Épreuves : `veridian_mon_ia.test.tsx` (sélecteurs exacts ; vu échouer : cadre forcé en `sans_moteur`, cadre inséré avant le clic).
 - Staging : le cadre vers le Hub de prod serait bloqué par la CSP si `HUB_BASE_URL` pointe ailleurs ; la fenêtre n'est éprouvée qu'en prod.
+
+## Un seul point d'entrée, l'installation du connecteur dans la carte (27/11)
+
+Un seul point d'entrée IA dans l'en-tête : la marque `[data-mon-ia]`. L'ancien bouton « Brancher mon IA » (`VeridianConnectAI`) est supprimé de
+`WorkspaceLayout.tsx` ; son contenu (installation par assistant, adresse MCP, commande Claude Code, révocation) est dans la carte `sans_moteur`, sous le
+lien « Relier mon IA » (fiche `83`). Garde : `veridian_layout_memo.test.tsx` échoue si l'en-tête le rend de nouveau.
+

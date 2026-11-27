@@ -1,12 +1,12 @@
 /**
- * Veridian — « Brancher mon IA » : un point d'entrée visible dans l'en-tête de la console.
- * Les liens viennent du Hub (voir lib/veridian_connect_ai). Si le Hub ne répond pas, le modal montre l'adresse MCP
- * à copier et un message : jamais de bouton mort.
+ * Veridian : installation du connecteur MCP, contenu de la carte « Relier mon IA » (veridian_mon_ia.tsx, VER-203 : un seul
+ * point d'entrée IA dans l'en-tête, l'ancien bouton « Brancher mon IA » n'existe plus). Installation par assistant, adresse MCP
+ * à copier, commande Claude Code, lien de révocation. Les liens viennent du Hub (voir lib/veridian_connect_ai). Si le Hub ne
+ * répond pas : message et adresse MCP à copier, jamais de bouton mort. Mode veridian-managed seulement. Fiche 83.
  */
 
-import { useState } from 'react'
-import { Button, Modal, Space, Typography, message } from 'antd'
-import { ApiOutlined, CopyOutlined } from '@ant-design/icons'
+import { Button, Space, Typography, message } from 'antd'
+import { CopyOutlined } from '@ant-design/icons'
 import { useLingui } from '@lingui/react/macro'
 import { useQuery } from '@tanstack/react-query'
 import { veridianApi, type VeridianModeResponse } from '../services/api/veridian'
@@ -26,9 +26,8 @@ async function copy(text: string, okMessage: string) {
   }
 }
 
-export function VeridianConnectAI({ compact = false }: { compact?: boolean }) {
+export function VeridianInstallLinks() {
   const { t } = useLingui()
-  const [open, setOpen] = useState(false)
 
   const { data: mode } = useQuery<VeridianModeResponse | null>({
     queryKey: ['veridian', 'mode'],
@@ -36,93 +35,72 @@ export function VeridianConnectAI({ compact = false }: { compact?: boolean }) {
     staleTime: 10 * 60 * 1000,
     retry: false
   })
+  const managed = mode?.mode === 'veridian-managed'
   const { data: links, isFetched } = useQuery<InstallLinks | null>({
     queryKey: ['veridian', 'mcp-install-links'],
     queryFn: () => fetchInstallLinks(),
-    enabled: open,
+    enabled: managed,
     staleTime: 5 * 60 * 1000,
     retry: false
   })
 
-  if (!mode || mode.mode !== 'veridian-managed') return null
+  if (!managed) return null
 
   const address = links?.url ?? VERIDIAN_MCP_FALLBACK_URL
   const unavailable = isFetched && (!links || links.assistants.length === 0)
 
   return (
-    <>
-      <Button
-        color="default"
-        variant="filled"
-        icon={<ApiOutlined />}
-        onClick={() => setOpen(true)}
-        data-testid="veridian-connect-ai"
-        aria-label={t`Brancher mon IA`}
-      >
-        {compact ? null : t`Brancher mon IA`}
-      </Button>
-      <Modal
-        open={open}
-        onCancel={() => setOpen(false)}
-        footer={null}
-        title={t`Brancher mon IA`}
-        destroyOnHidden
-      >
-        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-          <Typography.Paragraph style={{ marginBottom: 0 }}>
-            {links?.phrase ??
-              t`Une seule connexion Veridian : votre IA accède à Mail et à vos autres apps Veridian.`}
-          </Typography.Paragraph>
+    <div data-testid="veridian-connect-ai">
+      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        <Typography.Text strong>{t`Connect it to your assistant`}</Typography.Text>
+        {links?.assistants.map((a) => (
+          <div key={a.cle}>
+            <Button type="primary" href={a.installation} target="_blank" rel="noopener noreferrer" block>
+              {a.libelle}
+            </Button>
+            {a.etape && (
+              <Typography.Text type="secondary" style={{ display: 'block', marginTop: 4 }}>
+                {a.etape}
+              </Typography.Text>
+            )}
+          </div>
+        ))}
 
-          {links?.assistants.map((a) => (
-            <div key={a.cle}>
-              <Button type="primary" href={a.installation} target="_blank" rel="noopener noreferrer" block>
-                {a.libelle}
-              </Button>
-              {a.etape && (
-                <Typography.Text type="secondary" style={{ display: 'block', marginTop: 4 }}>
-                  {a.etape}
-                </Typography.Text>
-              )}
-            </div>
-          ))}
+        {unavailable && (
+          <Typography.Text type="warning" data-testid="veridian-connect-ai-fallback">
+            {t`The install buttons are temporarily unavailable. Add this address as an MCP server in your assistant:`}
+          </Typography.Text>
+        )}
 
-          {unavailable && (
-            <Typography.Text type="warning" data-testid="veridian-connect-ai-fallback">
-              {t`Les boutons d'installation sont momentanément indisponibles. Ajoutez cette adresse comme serveur MCP dans votre assistant :`}
+        <div>
+          <Typography.Text type="secondary">{t`MCP address`}</Typography.Text>
+          <Space.Compact style={{ width: '100%' }}>
+            <Typography.Text code style={{ flex: 1, overflowWrap: 'anywhere' }}>
+              {address}
             </Typography.Text>
-          )}
+            <Button icon={<CopyOutlined />} onClick={() => void copy(address, t`Address copied`)} />
+          </Space.Compact>
+        </div>
 
+        {links?.claudeCode && (
           <div>
-            <Typography.Text type="secondary">{t`Adresse MCP`}</Typography.Text>
+            <Typography.Text type="secondary">{t`Claude Code`}</Typography.Text>
             <Space.Compact style={{ width: '100%' }}>
               <Typography.Text code style={{ flex: 1, overflowWrap: 'anywhere' }}>
-                {address}
+                {links.claudeCode}
               </Typography.Text>
-              <Button icon={<CopyOutlined />} onClick={() => void copy(address, t`Adresse copiée`)} />
+              <Button
+                icon={<CopyOutlined />}
+                onClick={() => void copy(links.claudeCode as string, t`Command copied`)}
+              />
             </Space.Compact>
           </div>
+        )}
 
-          {links?.claudeCode && (
-            <div>
-              <Typography.Text type="secondary">{t`Claude Code`}</Typography.Text>
-              <Space.Compact style={{ width: '100%' }}>
-                <Typography.Text code style={{ flex: 1, overflowWrap: 'anywhere' }}>
-                  {links.claudeCode}
-                </Typography.Text>
-                <Button
-                  icon={<CopyOutlined />}
-                  onClick={() => void copy(links.claudeCode as string, t`Commande copiée`)}
-                />
-              </Space.Compact>
-            </div>
-          )}
-
-          <Typography.Link href={VERIDIAN_MCP_REVOKE_URL} target="_blank" rel="noopener noreferrer">
-            {t`Gérer ou révoquer les accès IA`}
-          </Typography.Link>
-        </Space>
-      </Modal>
-    </>
+        <Typography.Link href={VERIDIAN_MCP_REVOKE_URL} target="_blank" rel="noopener noreferrer">
+          {t`Manage or revoke AI access`}
+        </Typography.Link>
+      </Space>
+    </div>
   )
 }

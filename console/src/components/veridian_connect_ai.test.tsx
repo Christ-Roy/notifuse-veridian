@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { i18n } from '@lingui/core'
 import { I18nProvider } from '@lingui/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { VeridianConnectAI } from './veridian_connect_ai'
+import { VeridianInstallLinks } from './veridian_connect_ai'
 import { fetchInstallLinks, sanitizeInstallLinks, VERIDIAN_MCP_FALLBACK_URL } from '../lib/veridian_connect_ai'
 
 i18n.loadAndActivate({ locale: 'en', messages: {} })
@@ -28,7 +28,7 @@ const renderIt = () => {
   return render(
     <QueryClientProvider client={client}>
       <I18nProvider i18n={i18n}>
-        <VeridianConnectAI />
+        <VeridianInstallLinks />
       </I18nProvider>
     </QueryClientProvider>
   )
@@ -68,7 +68,7 @@ describe('fetchInstallLinks', () => {
   })
 })
 
-describe('VeridianConnectAI', () => {
+describe('VeridianInstallLinks', () => {
   beforeEach(() => vi.clearAllMocks())
   afterEach(() => vi.unstubAllGlobals())
 
@@ -79,11 +79,11 @@ describe('VeridianConnectAI', () => {
     expect(container.querySelector('[data-testid="veridian-connect-ai"]')).toBeNull()
   })
 
-  it('ouvre le modal et rend les boutons du Hub (étape ChatGPT sous le bouton)', async () => {
+  it('rend les boutons du Hub (étape ChatGPT sous le bouton)', async () => {
     vi.mocked(veridianApi.getMode).mockResolvedValue({ mode: 'veridian-managed', signin_url: '/x', hub_url: 'https://app.veridian.site' })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => HUB_RESPONSE }))
     renderIt()
-    fireEvent.click(await screen.findByTestId('veridian-connect-ai'))
+    await screen.findByTestId('veridian-connect-ai')
     const claude = await screen.findByText('Ajouter à Claude')
     expect(claude.closest('a')?.getAttribute('href')).toContain('claude.ai/customize/connectors')
     expect(screen.getByText('Activez le mode développeur.')).toBeTruthy()
@@ -95,9 +95,19 @@ describe('VeridianConnectAI', () => {
     vi.mocked(veridianApi.getMode).mockResolvedValue({ mode: 'veridian-managed', signin_url: '/x', hub_url: 'https://app.veridian.site' })
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('hub down')))
     renderIt()
-    fireEvent.click(await screen.findByTestId('veridian-connect-ai'))
+    await screen.findByTestId('veridian-connect-ai')
     expect(await screen.findByTestId('veridian-connect-ai-fallback')).toBeTruthy()
     expect(screen.getByText(VERIDIAN_MCP_FALLBACK_URL)).toBeTruthy()
     expect(screen.queryByText('Ajouter à Claude')).toBeNull()
+  })
+
+  it('le contenu est en anglais dans la console anglaise (plus de français)', async () => {
+    vi.mocked(veridianApi.getMode).mockResolvedValue({ mode: 'veridian-managed', signin_url: '/x', hub_url: 'https://app.veridian.site' })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => HUB_RESPONSE }))
+    renderIt()
+    expect(await screen.findByText('MCP address')).toBeTruthy()
+    expect(screen.getByText('Manage or revoke AI access')).toBeTruthy()
+    expect(screen.queryByText('Adresse MCP')).toBeNull()
+    expect(screen.queryByText('Brancher mon IA')).toBeNull()
   })
 })

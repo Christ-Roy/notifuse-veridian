@@ -112,7 +112,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `75` lot L4 : aperçu e-mail en bac à sable, Liquid des contacts, mutants
 - `80` identité : Hub source des utilisateurs, `hub_user_id`, lien à usage unique, routes `/api/hub/*`
 - `82` essai du Hub (jamais appliqué), signal d'activité ; `90` Réglages > Plan
-- `83` MCP derrière la porte du Hub (JWT ES256, outils filtrés), bouton « Brancher mon IA »
+- `83` MCP derrière la porte du Hub (JWT ES256, outils filtrés), installation dans la carte `99`
 - `84` **standard des boîtes louées** : une porte, Notifuse (IMAP, SMTP, API, webhook), aucun tiers dans le chemin
 - `97` **domaines d'envoi** : DKIM d=<domaine du client>, SPF `_spf-envoi.veridian.site`, `sendingDomains.*`
 - `81` capacité base : connexions, incident du 07/11

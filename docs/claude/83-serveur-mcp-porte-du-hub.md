@@ -39,6 +39,14 @@ Contrat : `veridian-hub/docs/CONTRAT-MCP.md` (09/11/2026). Code : `internal/veri
 - **Jamais un modèle transactionnel** (il partirait sans plafond) ; `contact_unsubscribe` ne sait que désinscrire ; `list_remove_contact` refuse un désinscrit.
 - **Supprimer** modèle, segment ou liste : refusé tant qu'une séquence active le cite ; une liste, aussi si elle porte désinscrits, rebonds ou plaintes. `templates_update` et `segments_update` sont destructifs (effet sur l'envoi en cours).
 
-## « Brancher mon IA » dans la console (10/11/2026)
+## Installer le connecteur : dans la carte « Relier mon IA » (VER-203, 27/11/2026)
 
-Bouton visible dans l en-tête (`VeridianConnectAI`, mode `veridian-managed` seulement) qui ouvre un modal avec les boutons Claude, ChatGPT, Cursor et VS Code. Les liens sont lus au Hub (`GET https://app.veridian.site/api/mcp/liens-installation?app=notifuse`, publique, CORS ouvert, cache 5 min) par `lib/veridian_connect_ai.ts` : rien n est recopié. Réponse validée (schémas https:, cursor:, vscode: seulement, entrées incomplètes écartées). Si le Hub ne répond pas (4 s) ou répond autre chose : message et adresse MCP à copier, aucun bouton mort. Tests vitest (liens, schéma dangereux, délai, repli).
+Le bouton « Brancher mon IA » de l'en-tête n'existe plus : l'en-tête n'a qu'un point d'entrée IA, la marque `data-mon-ia` (fiche `99`). Son contenu
+(`VeridianInstallLinks`, `components/veridian_connect_ai.tsx`) est dans la carte `[data-carte="relier-mon-ia"]`, sous le lien « Relier mon IA », donc
+seulement quand le Hub dit `sans_moteur` : boutons par assistant (Claude, ChatGPT, Cursor, VS Code), adresse MCP à copier, commande Claude Code, lien de
+révocation. Mode `veridian-managed` seulement. Les liens sont lus au Hub (`GET https://app.veridian.site/api/mcp/liens-installation?app=notifuse`, publique,
+CORS ouvert, cache 5 min) par `lib/veridian_connect_ai.ts` : rien n'est recopié. Réponse validée (schémas https:, cursor:, vscode: seulement, entrées
+incomplètes écartées). Hub muet (4 s) ou réponse illisible : message et adresse MCP à copier, aucun bouton mort.
+Libellés : msgid en anglais (la langue source du catalogue est `en`), traduits dans `fr.po` ; un msgid français restait français dans la console anglaise
+(constaté en prod le 27/11). Tests : `veridian_connect_ai.test.tsx`, `veridian_mon_ia.test.tsx` (la carte porte l'installation), `veridian_layout_memo.test.tsx`
+(l'en-tête ne rend plus le bouton ; vu échouer par sabotage).

@@ -10,6 +10,8 @@ i18n.loadAndActivate({ locale: 'en', messages: {} })
 
 vi.mock('../services/api/client', () => ({ api: { get: vi.fn() } }))
 import { api } from '../services/api/client'
+vi.mock('../services/api/veridian', () => ({ veridianApi: { getMode: vi.fn() } }))
+import { veridianApi } from '../services/api/veridian'
 
 const HUB = 'https://app.veridian.site'
 const TENANT = '80945a9e-a5c7-499f-bd9c-87920ad19c8d'
@@ -132,5 +134,34 @@ describe('VeridianMonIA, marques communes (CONTRAT-HUB §5.24.1)', () => {
     } finally {
       if (top) Object.defineProperty(window, 'top', top)
     }
+  })
+
+  it('sans_moteur : la carte porte aussi l’installation du connecteur (liens du Hub, adresse MCP), sans cadre', async () => {
+    hubDit({ etat: 'sans_moteur', hub_url: HUB, tenant_id: TENANT })
+    vi.mocked(veridianApi.getMode).mockResolvedValue({ mode: 'veridian-managed', signin_url: '/x', hub_url: HUB })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          url: `${HUB}/api/mcp`,
+          assistants: [{ cle: 'claude', libelle: 'Ajouter à Claude', installation: 'https://claude.ai/customize/connectors', etape: null }],
+          claudeCode: `claude mcp add --transport http veridian ${HUB}/api/mcp`
+        })
+      })
+    )
+    monter()
+    fireEvent.click(await screen.findByRole('button', { name: 'Relier mon IA' }))
+    const carte = await waitFor(() => {
+      const c = document.querySelector('[data-carte="relier-mon-ia"]')
+      expect(c).not.toBeNull()
+      return c as HTMLElement
+    })
+    const install = await within(carte).findByText('Ajouter à Claude')
+    expect(install.closest('a')?.getAttribute('href')).toBe('https://claude.ai/customize/connectors')
+    expect(within(carte).getByText(`${HUB}/api/mcp`)).toBeTruthy()
+    expect(within(carte).getByText(/claude mcp add/)).toBeTruthy()
+    expect(document.querySelector('iframe')).toBeNull()
+    vi.unstubAllGlobals()
   })
 })

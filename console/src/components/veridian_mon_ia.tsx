@@ -5,16 +5,17 @@
  * Marques communes à toutes les apps Veridian (la batterie système du Hub les lit) :
  *   - `[data-mon-ia="prete"]` : bouton « Mon IA » ; son clic ouvre un dialogue « Mon IA » ; le cadre n'est inséré qu'à ce moment ;
  *   - `[data-mon-ia="sans_moteur"]` : bouton « Relier mon IA » ; son clic ouvre `[data-carte="relier-mon-ia"]` avec le lien « Relier mon IA »
- *     (nouvel onglet) ; aucun cadre nulle part ;
+ *     (nouvel onglet) ; aucun cadre nulle part ; la carte porte aussi l'installation du connecteur MCP (veridian_connect_ai, fiche 83) ;
  *   - éteinte, 404, Hub injoignable : aucune marque.
  */
 
 import { useState } from 'react'
-import { Button, Modal, Typography } from 'antd'
+import { Button, Divider, Modal, Typography } from 'antd'
 import { RobotOutlined } from '@ant-design/icons'
 import { useLingui } from '@lingui/react/macro'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../services/api/client'
+import { VeridianInstallLinks } from './veridian_connect_ai'
 import {
   affichageMonIA,
   urlCadreMonIA,
@@ -102,6 +103,8 @@ export function VeridianMonIA({ workspaceId }: { workspaceId: string | undefined
           <Button type="primary" href={relier} target="_blank" rel="noopener noreferrer">
             {t`Relier mon IA`}
           </Button>
+          <Divider />
+          <VeridianInstallLinks />
         </div>
       </Modal>
     </span>

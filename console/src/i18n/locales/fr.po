@@ -1079,6 +1079,10 @@ msgstr "Ajouter un webhook"
 msgid "Address"
 msgstr "Adresse"
 
+#: src/components/veridian_connect_ai.tsx
+msgid "Address copied"
+msgstr "Adresse copiée"
+
 #: src/components/automations/config/TriggerConfigForm.tsx
 #: src/components/contacts/ContactDetailsDrawer.tsx
 #: src/components/contacts/ContactsCsvUploadDrawer.tsx
@@ -1100,12 +1104,12 @@ msgid "Admin email is required"
 msgstr "L'email administrateur est requis"
 
 #: src/components/veridian_connect_ai.tsx
-msgid "Adresse copiée"
-msgstr "Adresse copiée"
+#~ msgid "Adresse copiée"
+#~ msgstr "Adresse copiée"
 
 #: src/components/veridian_connect_ai.tsx
-msgid "Adresse MCP"
-msgstr "Adresse MCP"
+#~ msgid "Adresse MCP"
+#~ msgstr "Adresse MCP"
 
 #: src/components/settings/SettingsSidebar.tsx
 msgid "Advanced"
@@ -2004,8 +2008,8 @@ msgstr "Logique de branche"
 #: src/components/veridian_connect_ai.tsx
 #: src/components/veridian_connect_ai.tsx
 #: src/components/veridian_connect_ai.tsx
-msgid "Brancher mon IA"
-msgstr "Brancher mon IA"
+#~ msgid "Brancher mon IA"
+#~ msgstr "Brancher mon IA"
 
 #: src/components/email_builder/blocks/MjBreakpointBlock.tsx
 msgid "Breakpoint Attributes"
@@ -2648,13 +2652,17 @@ msgstr "Colonnes"
 #~ msgid "Coming soon"
 #~ msgstr "Bientôt disponible"
 
+#: src/components/veridian_connect_ai.tsx
+msgid "Command copied"
+msgstr "Commande copiée"
+
 #: src/components/settings/ApiAgentsSettings.tsx
 msgid "Command copied to clipboard"
 msgstr "Commande copiée dans le presse-papiers"
 
 #: src/components/veridian_connect_ai.tsx
-msgid "Commande copiée"
-msgstr "Commande copiée"
+#~ msgid "Commande copiée"
+#~ msgstr "Commande copiée"
 
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx
 #: src/pages/AnalyticsPage.tsx
@@ -2858,6 +2866,10 @@ msgstr "Reliez chaque sortie au nœud suivant avec les poignées du bloc."
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Connect IMAP inbox"
 msgstr "Connecter une boîte IMAP"
+
+#: src/components/veridian_connect_ai.tsx
+msgid "Connect it to your assistant"
+msgstr "Connectez-la à votre assistant"
 
 #: src/components/settings/ApiAgentsSettings.tsx
 #: src/components/settings/ApiAgentsSettings.tsx
@@ -6202,8 +6214,8 @@ msgid "Generated SQL:"
 msgstr "SQL généré :"
 
 #: src/components/veridian_connect_ai.tsx
-msgid "Gérer ou révoquer les accès IA"
-msgstr "Gérer ou révoquer les accès IA"
+#~ msgid "Gérer ou révoquer les accès IA"
+#~ msgstr "Gérer ou révoquer les accès IA"
 
 #: src/components/settings/veridian_mailbox_setup.tsx
 msgid "Get a new link"
@@ -7467,8 +7479,8 @@ msgid "Left to Right"
 msgstr "De gauche à droite"
 
 #: src/components/veridian_connect_ai.tsx
-msgid "Les boutons d'installation sont momentanément indisponibles. Ajoutez cette adresse comme serveur MCP dans votre assistant :"
-msgstr "Les boutons d'installation sont momentanément indisponibles. Ajoutez cette adresse comme serveur MCP dans votre assistant :"
+#~ msgid "Les boutons d'installation sont momentanément indisponibles. Ajoutez cette adresse comme serveur MCP dans votre assistant :"
+#~ msgstr "Les boutons d'installation sont momentanément indisponibles. Ajoutez cette adresse comme serveur MCP dans votre assistant :"
 
 #: src/components/settings/SystemSettingsDrawer.tsx
 msgid "Let's Encrypt directory"
@@ -7826,6 +7838,10 @@ msgstr "Fait en sorte que la section s'étende sur toute la largeur de la fenêt
 msgid "Makes the wrapper span the entire email viewport width, ignoring container constraints (typically 600px). Useful for full-bleed backgrounds and hero sections."
 msgstr "Fait en sorte que le wrapper s'étende sur toute la largeur de la fenêtre email, ignorant les contraintes du conteneur (généralement 600px). Utile pour les arrière-plans pleine largeur et les sections hero."
 
+#: src/components/veridian_connect_ai.tsx
+msgid "Manage or revoke AI access"
+msgstr "Gérer ou révoquer les accès IA"
+
 #: src/components/settings/veridian_plan_settings.tsx
 #: src/components/veridian_brand_footer.tsx
 msgid "Manage subscription"
@@ -7959,6 +7975,10 @@ msgstr "Nombre maximal d'emails par JOUR vers ce fournisseur (VOLUME), compté d
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Maximum emails per MINUTE toward this provider (SPEED). Fractions allowed (0.5 = one email every 2 minutes). Leave empty for no per-class rate."
 msgstr "Nombre maximal d'emails par MINUTE vers ce fournisseur (VITESSE). Les fractions sont permises (0,5 = un email toutes les 2 minutes). Laissez vide pour aucun débit par classe."
+
+#: src/components/veridian_connect_ai.tsx
+msgid "MCP address"
+msgstr "Adresse MCP"
 
 #: src/components/settings/veridian_mailbox_create.tsx
 msgid "Me (closes when I leave the workspace)"
@@ -13352,6 +13372,10 @@ msgstr "Le nom d'hôte sous lequel votre serveur s'identifie en se connectant au
 msgid "The inbox is temporarily unavailable"
 msgstr "La boîte de réception est momentanément indisponible"
 
+#: src/components/veridian_connect_ai.tsx
+msgid "The install buttons are temporarily unavailable. Add this address as an MCP server in your assistant:"
+msgstr "Les boutons d'installation sont momentanément indisponibles. Ajoutez cette adresse comme serveur MCP dans votre assistant :"
+
 #: src/components/settings/veridian_mailbox_setup.tsx
 msgid "The link works until {until}."
 msgstr "Le lien fonctionne jusqu'à {until}."
@@ -14338,8 +14362,8 @@ msgid "Undo (Ctrl+Z)"
 msgstr "Annuler (Ctrl+Z)"
 
 #: src/components/veridian_connect_ai.tsx
-msgid "Une seule connexion Veridian : votre IA accède à Mail et à vos autres apps Veridian."
-msgstr "Une seule connexion Veridian : votre IA accède à Mail et à vos autres apps Veridian."
+#~ msgid "Une seule connexion Veridian : votre IA accède à Mail et à vos autres apps Veridian."
+#~ msgstr "Une seule connexion Veridian : votre IA accède à Mail et à vos autres apps Veridian."
 
 #: src/components/contacts/SegmentsFilter.tsx
 #: src/components/timeline/ContactTimeline.tsx

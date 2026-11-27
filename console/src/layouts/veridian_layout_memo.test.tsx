@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { i18n } from '@lingui/core'
 import { I18nProvider } from '@lingui/react'
 
@@ -27,7 +27,12 @@ vi.mock('../components/file_manager/context', () => ({ FileManagerProvider: ({ c
 vi.mock('../components/mail/veridian_mail_menu_item', () => ({ veridianInboxMenuItem: () => null }))
 vi.mock('../components/veridian_organisation', () => ({ VeridianBrandProvider: ({ children }: { children?: React.ReactNode }) => <>{children}</> }))
 vi.mock('../components/veridian_brand_header_link', () => ({ VeridianBrandHeaderLink: () => null }))
-vi.mock('../components/veridian_connect_ai', () => ({ VeridianConnectAI: () => null }))
+// VER-203 : un seul point d'entrée IA dans l'en-tête (la marque « Mon IA »). L'ancien bouton « Brancher mon IA » n'existe plus : son
+// contenu vit dans la carte « Relier mon IA ». Si la mise en page rend de nouveau l'un de ces composants, la sonde apparaît et le test échoue.
+vi.mock('../components/veridian_connect_ai', () => ({
+  VeridianConnectAI: () => <button data-testid="veridian-connect-ai">Brancher mon IA</button>,
+  VeridianInstallLinks: () => <button data-testid="veridian-connect-ai">Brancher mon IA</button>
+}))
 vi.mock('../components/veridian_mon_ia', () => ({ VeridianMonIA: () => null }))
 vi.mock('../components/veridian_brand_footer', () => ({ VeridianBrandFooter: () => null }))
 vi.mock('../components/veridian_soft_delete_banner', () => ({ VeridianSoftDeleteBanner: () => null }))
@@ -60,6 +65,12 @@ describe('WorkspaceLayout mémorise le dernier espace ouvert', () => {
   it('ouvrir un espace de la liste le mémorise pour cette personne', () => {
     open()
     expect(recallSpace('u1')).toBe('a-moi')
+  })
+
+  it('l\'en-tête ne porte plus le bouton « Brancher mon IA » (VER-203)', () => {
+    open()
+    expect(screen.queryByTestId('veridian-connect-ai')).toBeNull()
+    expect(screen.queryByText('Brancher mon IA')).toBeNull()
   })
 
   it('un espace absent de la liste de la personne n’est pas mémorisé', () => {
