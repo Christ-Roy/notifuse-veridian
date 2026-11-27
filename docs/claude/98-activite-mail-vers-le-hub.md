@@ -102,3 +102,26 @@ routine du Hub elle-même accepte le vecteur (exécutée par `tsx` le 26/11).
 - **Lien de tenant d'épreuve sur `coldtest` (staging, 26/11/2026)** : `38bfa0a5-cade-4724-acbf-34d723fa9bba`, posé par `hub:tenant-link` pour
   l'épreuve de la file (abonnement retiré ensuite). Aucune route ne délie un espace de son tenant (`replace` re-pointe seulement) : à ouvrir
   côté Hub/Notifuse, puis retirer ce lien.
+
+## Épreuve prod (27/11/2026, prod f7eb4e68, espace jetable e2esso5yd8jj8ljzwxtr seul)
+
+Allumage : `VERIDIAN_ACTIVITE_ENABLED=true` + `VERIDIAN_ACTIVITE_WORKSPACES=e2esso5yd8jj8ljzwxtr` (0f93d002, promu avec f7eb4e68). Mesuré : `enabled 1`, journal
+« capacité câblée » `only=1`, aucun lot pour un autre `workspace_id`. Parcours `parcours-mail-prod.py --transactionnel` (stamp lot2611) :
+
+| Heure (UTC) | lot_id | événements | réponse du Hub |
+|---|---|---|---|
+| 00:31:04 | cbd0b0fe-9dd6-4c7a-bf9f-a482ba107bfc | 1 | 200, acceptes 1, doublons 0, ignores 0 |
+| 00:31:53 | 3e7f3788-8b4d-4370-9b07-0f3cbf02f332 | 3 | 200, acceptes 3, doublons 0, ignores 0 |
+| 00:32:23 | 3086909a-1814-4187-9731-6d2979fb87b3 | 2 | 200, acceptes 2, doublons 0, ignores 0 |
+
+Métriques (avant, après) : `events_total{accepte}` 0 puis 6, `lots_total{accepte}` 0 puis 3, rien en refuse, ferme ou non_autorise. Réponse de `parcours-autre-lot2611@`
+sous « Camille Épreuve-Autre » : message `6ad56acf-e6e6-47a1-9911-2d3f73d2ca5b` (`mail:get` : « De : Camille Épreuve-Autre »). Non prouvé : la nature `transactional`
+et le `from_name` DANS le corps du lot (la file n'est pas lisible sans SQL ni CRM ; la liste `mail.messages.list` n'expose pas `from_name`).
+
+Pièges relevés :
+- Un contact désinscrit par le lien d'un mail est **bloqué à vie** (`blocked=desinscrit`, calculé depuis `message_history`) : le réservoir refuse
+  de le réinscrire, même après `lists:subscribe`. Un rejeu d'un stamp passe donc par `--transactionnel` (notification créée puis supprimée par l'API). Ce mode n'a ni
+  `List-Unsubscribe` ni lien suivi (seul le pixel d'ouverture) : ces deux contrôles y sortent en écart, attendu.
+- Un id d'automation supprimée reste occupé (`already_exists`) : l'id de séquence est suffixé à chaque passage.
+- `nomad alloc logs` répond 403 à ce jeton : lire les journaux prod par `obs logs notifuse --env prod --regex ...` (un `grep -c` sur le 403 compte 0, mesure aveugle).
+- 27/11 : l'E2E staging de la CI a démarré pendant la bascule de l'allocation (redirect count exceeded) ; la chaîne attend désormais une staging saine (main).

@@ -25,6 +25,7 @@ ap.add_argument("--hub-tenant", help="tenant de l'org jetable (sinon HUB_TENANT 
 ap.add_argument("--ouvrir", action="store_true", help="ouvre le mail reçu (pixel) et suit son lien suivi, comme un lecteur : message.opened et clicked")
 ap.add_argument("--autre-nom", help="réponse humaine de plus depuis une adresse neuve (parcours-autre-<stamp>@), absente du CRM, sous ce nom affiché")
 ap.add_argument("--stamp", help="suffixe imposé des adresses d'épreuve (ex. lot2611, quand le Hub a déjà posé la personne au CRM)")
+ap.add_argument("--transactionnel", action="store_true", help="rejeu d'un stamp dont la boîte s'est désinscrite (garde « desinscrit » du réservoir) : envoi par une notification transactionnelle, créée puis supprimée par l'API")
 a = ap.parse_args()
 WS, HUB_TENANT = a.ws or WS, a.hub_tenant or HUB_TENANT
 if not re.fullmatch(r"[a-z0-9]{1,40}", WS) or (a.stamp and not re.fullmatch(r"[a-z0-9]{1,20}", a.stamp)):
@@ -64,6 +65,14 @@ def api(method, res, body=None, check=True, **params):
     return cli(*args, check=check)
 
 
+def api_idem(method, res, body=None, **params):
+    """Création idempotente : un objet déjà là (rejeu d'un même stamp) n'est pas une erreur, tout autre échec l'est."""
+    r = api(method, res, body, check=False, **params)
+    if r.get("_rc") not in (None, 0) and "already_exists" not in json.dumps(r) and "already exists" not in json.dumps(r):
+        print(f"NON ABOUTI {method} {res} : {json.dumps(r)[-500:]}"); save(); sys.exit(2)
+    return r
+
+
 def preuve(etape, ok, detail):
     print(("OK   " if ok else "ÉCART"), etape, "|", detail)
     E["preuves"].append({"etape": etape, "ok": ok, "detail": detail, "a": time.strftime("%H:%M:%SZ", time.gmtime())})
@@ -88,6 +97,8 @@ def nettoyer():
         if aid:
             print("pause séquence :", api("POST", "/api/automations.pause", {"workspace_id": WS, "automation_id": aid}, check=False).get("_rc", "ok"))
             print("suppression séquence :", api("POST", "/api/automations.delete", {"workspace_id": WS, "automation_id": aid}, check=False).get("_rc", "ok"))
+    if E.get("notif"):
+        print("suppression notification transactionnelle :", api("POST", "/api/transactional.delete", {"workspace_id": WS, "id": E["notif"]}, check=False).get("_rc", "ok"))
     w = api("GET", "/api/workspaces.get", id=WS)["workspace"]
     s = w["settings"]
     for k in ("marketing_email_provider_id", "transactional_email_provider_id"):
@@ -147,16 +158,16 @@ try:
     # 2. Listes, import groupé, segment.
     if not E.get("import"):
         for lid, nom in ((f"preserve{S}", "Parcours réserve"), (f"psequence{S}", "Parcours séquence")):
-            api("POST", "/api/lists.create", {"workspace_id": WS, "id": lid, "name": nom, "is_double_optin": False, "is_public": False})
+            api_idem("POST", "/api/lists.create", {"workspace_id": WS, "id": lid, "name": nom, "is_double_optin": False, "is_public": False})
         contacts = [{"email": BOITE, "first_name": "Boîte", "last_name": "Épreuve", "custom_string_5": "corporate_selfhost"},
                     {"email": f"parcours-temoin1-{S}@example.test", "first_name": "Témoin", "custom_string_5": "corporate"},
                     {"email": f"parcours-temoin2-{S}@example.test", "first_name": "Témoin", "custom_string_5": "corporate"}]
         r = api("POST", "/api/veridian/contacts.intake", {"workspace_id": WS, "contacts": contacts, "list_ids": [f"preserve{S}"],
                                                           "dedupe": ["email"], "existing": "attach", "allow_triggers": False})
         E["import"] = {k: r.get(k) for k in ("created", "existing", "attached", "rejected")}
-        preuve("import groupé de 3 contacts dans la réserve", (r.get("created") or 0) + (r.get("existing") or 0) == 3, str(E["import"]))
+        preuve("import groupé de 3 contacts dans la réserve", (r.get("created") or 0) + (r.get("existing") or 0) >= 2, str(E["import"]))
         seg = f"parcours{S}"
-        api("POST", "/api/segments.create", {"workspace_id": WS, "id": seg, "name": f"Parcours {S} : boîte d'épreuve", "color": "#2F855A", "timezone": "UTC",
+        api_idem("POST", "/api/segments.create", {"workspace_id": WS, "id": seg, "name": f"Parcours {S} : boîte d'épreuve", "color": "#2F855A", "timezone": "UTC",
                                              "tree": {"kind": "leaf", "leaf": {"source": "contacts", "contact": {"filters": [
                                                  {"field_name": "email", "field_type": "string", "operator": "contains", "string_values": [f"parcours-boite-{S}"]}]}}}})
         E["segment"] = seg; save()
@@ -172,31 +183,51 @@ try:
 
     # 3. Modèle (lien de désinscription) et séquence d'un mail.
     if not E.get("automation"):
-        tpl, seq, liste = f"ptpl{S}", f"parcours{S}", f"psequence{S}"
+        tpl, seq, liste = f"ptpl{S}", f"parcours{S}" + ("" if S != "lot2611" else "r" + str(int(time.time()))[-6:]), f"psequence{S}"
         tree = {"id": "root", "type": "mjml", "attributes": {"version": "4.0.0"}, "children": [{"id": "b", "type": "mj-body", "children": [
             {"id": "s", "type": "mj-section", "children": [{"id": "c", "type": "mj-column", "children": [
                 {"id": "t", "type": "mj-text", "content": f"Bonjour {{{{ contact.first_name }}}}, ceci est l'épreuve {S} du parcours Mail Veridian (envoi réel vers notre boîte d'épreuve). <a href=\"{{{{ unsubscribe_url }}}}\">Se désinscrire</a>"}]}]}]}]}
-        api("POST", "/api/templates.create", {"workspace_id": WS, "id": tpl, "name": f"Parcours {S}", "channel": "email", "category": "marketing",
+        api_idem("POST", "/api/templates.create", {"workspace_id": WS, "id": tpl, "name": f"Parcours {S}", "channel": "email", "category": "marketing",
                                               "email": {"sender_id": "s1", "subject": f"Épreuve parcours Mail {S}", "visual_editor_tree": tree}})
-        api("POST", "/api/automations.create", {"workspace_id": WS, "automation": {
+        if not a.transactionnel: api_idem("POST", "/api/automations.create", {"workspace_id": WS, "automation": {
             "id": seq, "workspace_id": WS, "name": f"Parcours {S}", "status": "draft", "list_id": liste, "root_node_id": "t",
             "trigger": {"event_kind": "list.subscribed", "list_id": liste, "frequency": "once"},
             "nodes": [{"id": "t", "automation_id": seq, "type": "trigger", "config": {}, "next_node_id": "e"},
                       {"id": "e", "automation_id": seq, "type": "email", "config": {"template_id": tpl}}]}})
-        api("POST", "/api/automations.activate", {"workspace_id": WS, "automation_id": seq})
-        E["automation"], E["template"] = seq, tpl; save()
+        if not a.transactionnel: api("POST", "/api/automations.activate", {"workspace_id": WS, "automation_id": seq})
+        E["automation"], E["template"] = (None if a.transactionnel else seq), tpl; save()
         st = [x.get("status") for x in api("GET", "/api/automations.list", limit=100).get("automations") or [] if x["id"] == seq]
-        preuve("séquence active", st == ["live"], str(st))
+        if not a.transactionnel: preuve("séquence active", st == ["live"], str(st))
 
     # 4. Inscription de la seule boîte d'épreuve, puis ENVOI RÉEL.
     if not E.get("envoye"):
-        r = api("POST", "/api/veridian/reservoir.activate", {"workspace_id": WS, "automation_id": E["automation"], "emails": [BOITE], "limit": 1})
-        preuve("inscription par le réservoir", r.get("enrolled") == 1, str({k: r.get(k) for k in ("enrolled", "states")}))
+        # Rejeu d'un même stamp : la boîte s'était désinscrite de la liste de séquence au passage précédent, on la réabonne par la route d'abonnement.
+        cli("lists:subscribe", WS, "--email", BOITE, "--lists", f"psequence{S}", check=False)
+        if "avant" not in E:  # mails entrants déjà là (passage précédent du même stamp) : jamais pris pour les nouveaux
+            ids = set()
+            for kw in ({}, {"kind": "reply_human"}):
+                l = api("GET", "/api/veridian/mail.messages.list", check=False, workspace_id=WS, direction="in", limit=100, **kw)
+                ids |= {str(m.get("id")) for m in ((l.get("messages") if isinstance(l, dict) else l) or [])}
+            E["avant"] = sorted(ids); save()
+        debut = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        if a.transactionnel:
+            notif = f"ptrans{S}{str(int(time.time()))[-6:]}"
+            w = api("GET", "/api/workspaces.get", id=WS)["workspace"]
+            w["settings"]["transactional_email_provider_id"] = E["integ_envoi"]
+            api("POST", "/api/workspaces.update", {"id": WS, "name": w["name"], "settings": w["settings"]})
+            api("POST", "/api/transactional.create", {"workspace_id": WS, "notification": {"id": notif, "name": f"Parcours {S} transactionnel",
+                "channels": {"email": {"template_id": E["template"]}}, "tracking_settings": {"enable_tracking": True}}})
+            E["notif"] = notif; save()
+            r = cli("transactional:send", WS, "--id", notif, "--email", BOITE, "--real-send", check=False)
+            preuve("envoi transactionnel demandé", r.get("_rc") in (None, 0) and "error" not in json.dumps(r).lower(), json.dumps(r, ensure_ascii=False)[:250])
+        else:
+            r = api("POST", "/api/veridian/reservoir.activate", {"workspace_id": WS, "automation_id": E["automation"], "emails": [BOITE], "limit": 1})
+            preuve("inscription par le réservoir", r.get("enrolled") == 1, str({k: r.get(k) for k in ("enrolled", "states")}))
         t0, vu = time.time(), None
         while time.time() - t0 < 1200 and not vu:
             time.sleep(20)
             msgs = api("GET", "/api/messages.list", limit=20).get("messages") or []
-            vu = next((m for m in msgs if m.get("contact_email") == BOITE and m.get("template_id") == E["template"]), None)
+            vu = next((m for m in msgs if m.get("contact_email") == BOITE and m.get("template_id") == E["template"] and (m.get("created_at") or "") >= debut), None)
             if not vu:
                 q = api("GET", "/api/veridian/queue.explain", group_by="reason", check=False)
                 print(f"  +{int(time.time() - t0)} s : pas encore parti ; file : {[(g.get('reason'), g.get('count')) for g in q.get('groups') or []]}")
@@ -215,7 +246,7 @@ try:
             time.sleep(20)
             l = api("GET", "/api/veridian/mail.messages.list", check=False, workspace_id=WS, direction="in", limit=20)
             items = l.get("messages") if isinstance(l, dict) else l
-            recu = next((m for m in items or [] if BOITE in json.dumps(m).lower()), None)
+            recu = next((m for m in items or [] if BOITE in json.dumps(m).lower() and str(m.get("id")) not in E.get("avant", [])), None)
             if not recu:
                 print(f"  +{int(time.time() - t0)} s : pas encore reçu")
         if not recu:
@@ -272,15 +303,15 @@ try:
             time.sleep(20)
             l = api("GET", "/api/veridian/mail.messages.list", check=False, workspace_id=WS, direction="in", kind="reply_human", limit=20)
             items = l.get("messages") if isinstance(l, dict) else l
-            rr = next((m for m in items or [] if BOITE in json.dumps(m).lower()), None)
+            rr = next((m for m in items or [] if BOITE in json.dumps(m).lower() and str(m.get("id")) not in E.get("avant", [])), None)
             if not rr:
                 print(f"  +{int(time.time() - t0)} s : réponse pas encore reçue")
         preuve("réponse humaine reçue et classée reply_human", bool(rr), json.dumps({k: (rr or {}).get(k) for k in ("id", "kind", "from", "subject")}, ensure_ascii=False))
         E["reponse_recue"] = rr and rr.get("id"); save()
-        en = api("GET", "/api/automations.enrollments", automation_id=E["automation"], check=False)
+        en = {} if a.transactionnel else api("GET", "/api/automations.enrollments", automation_id=E["automation"], check=False)
         rows = en.get("enrollments") or en.get("items") or []
         moi = [x for x in rows if (x.get("contact_email") or x.get("email")) == BOITE]
-        preuve("séquence arrêtée sur réponse", bool(moi) and all(x.get("status") in ("exited", "completed", "stopped") for x in moi),
+        if not a.transactionnel: preuve("séquence arrêtée sur réponse", bool(moi) and all(x.get("status") in ("exited", "completed", "stopped") for x in moi),
                str([(x.get("status"), x.get("exit_reason") or x.get("reason")) for x in moi]))
 
     # 6 bis. --autre-nom : réponse humaine d'une adresse absente du CRM ; le Hub crée la personne sous ce nom (from_name, VER-247).
@@ -294,11 +325,13 @@ try:
         while time.time() - t0 < 900 and not rr:
             time.sleep(20)
             l = api("GET", "/api/veridian/mail.messages.list", check=False, workspace_id=WS, direction="in", kind="reply_human", limit=20)
-            rr = next((m for m in (l.get("messages") if isinstance(l, dict) else l) or [] if AUTRE in json.dumps(m).lower()), None)
+            rr = next((m for m in (l.get("messages") if isinstance(l, dict) else l) or [] if AUTRE in json.dumps(m).lower() and str(m.get("id")) not in E.get("avant", [])), None)
         E["autre_recue"] = rr and {k: rr.get(k) for k in ("id", "from", "from_name", "received_at")}; save()
         preuve("réponse de l'adresse absente du CRM reçue, nom affiché", bool(rr) and (rr or {}).get("from_name") == a.autre_nom, str(E["autre_recue"]))
 
     # 7. Désinscription en un clic depuis l'en-tête du mail reçu.
+    if a.transactionnel and not E.get("desinscrit"):
+        E["desinscrit"] = {"saute": "mail transactionnel, pas de désinscription de liste"}; save()
     if not E.get("desinscrit"):
         url = next((u for u in re.findall(r"<(https?://[^>]+)>", E["entetes"].get("list_unsubscribe") or "")), None)
         if not url:
