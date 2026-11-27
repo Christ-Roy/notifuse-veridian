@@ -5,6 +5,7 @@ import { useLingui } from '@lingui/react/macro'
 
 import { mailErrorKind, mailService, type Mailbox, type MailMessage, type MailSendResult } from '../../services/api/veridian_mail'
 import { VeridianMailAttachments } from './veridian_mail_attachments'
+import { MailContactButton } from './veridian_mail_contact_button'
 import { VeridianMailBody } from './veridian_mail_body'
 import { saveBlob } from './veridian_mail_download'
 import { VeridianMailDsnCard } from './veridian_mail_dsn_card'
@@ -115,6 +116,7 @@ const MessageViewInner: React.FC<Props> = ({ workspaceId, message, mailboxes, ti
         >
           {handled ? t`Mark as to handle` : t`Mark as handled`}
         </Button>
+        <MailContactButton workspaceId={workspaceId} email={message.contact_email} />
         <Button icon={<DownloadOutlined />} loading={rawBusy} onClick={() => void downloadRaw()}>
           {message.direction === 'out' ? t`Download the .eml (reconstructed)` : t`Download the raw message (.eml)`}
         </Button>

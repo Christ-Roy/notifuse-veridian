@@ -139,6 +139,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 // eslint-disable-next-line react-refresh/only-export-components -- Hook co-located with context
+// Veridian (27/11) : le contexte s'il existe, sans lever (composant monté hors session : aperçus, tests sans fournisseur).
+export function useOptionalAuth() {
+  return useContext(AuthContext)
+}
+
+// eslint-disable-next-line react-refresh/only-export-components -- Hook co-located with context
 export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {

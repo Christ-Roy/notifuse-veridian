@@ -44,7 +44,8 @@ vi.mock('../router', () => ({ router: { navigate: vi.fn() } }))
 let perms: { message_history: { read: boolean; write: boolean } } = { message_history: { read: true, write: true } }
 vi.mock('../contexts/AuthContext', () => ({
   useWorkspacePermissions: () => ({ permissions: perms, loading: false }),
-  useAuth: () => ({ workspaces: [{ id: 'ws-1', settings: { timezone: 'Europe/Paris' } }], user: { email: 'robert@exemple.fr' } })
+  useAuth: () => ({ workspaces: [{ id: 'ws-1', settings: { timezone: 'Europe/Paris' } }], user: { email: 'robert@exemple.fr' } }),
+  useOptionalAuth: () => ({ workspaces: [{ id: 'ws-1', settings: { timezone: 'Europe/Paris' } }], user: { email: 'robert@exemple.fr' } })
 }))
 
 vi.mock('../services/api/veridian_mail', async (importOriginal) => {

@@ -14928,6 +14928,10 @@ msgstr "Vertikale Ausrichtung"
 msgid "View"
 msgstr ""
 
+#: src/components/mail/veridian_mail_contact_button.tsx
+msgid "View contact"
+msgstr ""
+
 #: src/components/automations/AutomationCard.tsx
 msgid "View Flow Stats"
 msgstr "Flow-Statistiken anzeigen"
