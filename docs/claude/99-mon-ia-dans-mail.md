@@ -30,6 +30,7 @@ migration V87 (`veridian_ia_fils`), console `components/veridian_mon_ia.tsx` + `
 - Marques communes (le cas 56 de la batterie du Hub les lit) : `[data-mon-ia="prete"|"sans_moteur"]` ; `prete` : bouton `Mon IA`, dialogue « Mon IA », cadre
   `{HUB}/ia/chat?app=notifuse&tenant=<tenant_id>` inséré seulement à l'ouverture ; `sans_moteur` : bouton `Relier mon IA`, `[data-carte="relier-mon-ia"]`
   avec le lien `Relier mon IA` (`{HUB}/dashboard/ia`, `target=_blank`), jamais un cadre ; `eteinte`, 404, Hub muet : aucune marque. Console ouverte dans un cadre : rien.
+- Les libellés `Mon IA` et `Relier mon IA` ne se traduisent dans aucune langue (`en.po` : msgstr = msgid, tenu par test) : la batterie du Hub les lit tels quels, console en anglais comprise (constaté en prod le 27/11 : `Connect my AI`).
 - Le texte de la carte est celui du contrat, tel quel (il dit « sans clé » : on ne propose jamais de champ ni de saisie de clé).
 - Épreuves : `veridian_mon_ia.test.tsx` (sélecteurs exacts ; vu échouer : cadre forcé en `sans_moteur`, cadre inséré avant le clic).
 - Staging : le cadre vers le Hub de prod serait bloqué par la CSP si `HUB_BASE_URL` pointe ailleurs ; la fenêtre n'est éprouvée qu'en prod.
