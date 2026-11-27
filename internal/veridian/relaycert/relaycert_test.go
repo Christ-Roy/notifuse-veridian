@@ -1,6 +1,7 @@
 package relaycert
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -8,6 +9,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
 	"math/big"
 	"slices"
@@ -478,4 +480,40 @@ func TestManager_DeuxNoms(t *testing.T) {
 	if ok, _ := m.Tick(context.Background()); ok || is.calls != calls {
 		t.Fatal("complet et loin de l'échéance : plus rien à émettre")
 	}
+}
+
+// VER-270 (deux exemplaires) : un suiveur n'émet jamais, il sert le certificat que le leader a posé dans le stockage.
+func TestManager_FollowLeader_SeulLeLeaderEmet(t *testing.T) {
+	now := time.Now()
+	store := &memStore{b: makeBundle(t, now.Add(10*24*time.Hour))}
+	issuer := &fakeIssuer{next: makeBundle(t, now.Add(90*24*time.Hour))}
+	m, h := newTestManager(t, store, issuer, now)
+	_ = m.Load(context.Background())
+	m.FollowLeader(func() bool { return false })
+	if renewed, err := m.Tick(context.Background()); renewed || err != nil || issuer.calls != 0 {
+		t.Fatalf("suiveur : aucune émission attendue, renewed=%v err=%v calls=%d", renewed, err, issuer.calls)
+	}
+	// Le leader a renouvelé entre-temps : le suiveur relit le stockage et sert le neuf.
+	fresh := makeBundle(t, now.Add(90*24*time.Hour))
+	store.b = fresh
+	_, _ = m.Tick(context.Background())
+	got, err := h.GetCertificate(nil)
+	if err != nil || got == nil || !bytes.Equal(got.Certificate[0], firstDER(t, fresh.CertPEM)) {
+		t.Fatalf("le suiveur doit servir le certificat posé par le leader (err=%v)", err)
+	}
+	m.FollowLeader(func() bool { return true })
+	store.b = makeBundle(t, now.Add(10*24*time.Hour))
+	_ = m.Load(context.Background())
+	if renewed, _ := m.Tick(context.Background()); !renewed || issuer.calls != 1 {
+		t.Fatalf("leader : renouvellement attendu, calls=%d", issuer.calls)
+	}
+}
+
+func firstDER(t *testing.T, certPEM []byte) []byte {
+	t.Helper()
+	blk, _ := pem.Decode(certPEM)
+	if blk == nil {
+		t.Fatal("PEM illisible")
+	}
+	return blk.Bytes
 }

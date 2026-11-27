@@ -52,6 +52,7 @@ func WireVeridian(a *App) error {
 	if err := a.veridianInitHandlers(); err != nil {
 		return err
 	}
+	a.veridianFollowLeader()
 	if err := wireVeridian(a, veridianmig.Default, platform.Default); err != nil {
 		return err
 	}

@@ -33,7 +33,8 @@ brique = une fiche + une ligne d'index.
    défaut`. Retirer ou réordonner un gate sans relire toute la cascade grille un
    domaine d'envoi. Les plafonds se résolvent UNE fois (`veridianResolveCapLimits`),
    partagée avec `VeridianEffectivePlan` (API `emailProfiles.overview`) : ne pas les
-   recalculer ailleurs. → `03,04,08,19,21,22,23,25,27,28,29,30,31,32,38,54,56,100`
+   recalculer ailleurs. Ces portes vivent en mémoire : seul l'exemplaire leader envoie (`101`).
+   → `03,04,08,19,21,22,23,25,27,28,29,30,31,32,38,54,56,100,101`
 5. **`DROP DATABASE` toujours `WITH (FORCE)`, et le record système supprimé AVANT la
    base (record-first).** Sinon la base workspace se recrée toute seule dans la
    seconde (le worker ré-élit un record encore vivant). Staging uniquement ;
@@ -81,10 +82,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 ## Index des fiches (`docs/claude/`)
 
 **Branche & conventions de code**
-- `01` branche et workflow
-- `02` convention `veridian_*.go` flat
-- `50` conventions clés (résumé exécutable)
-- `51` Claude Agent Rules (pas d'auto-attribution)
+- `01` branche · `02` convention `veridian_*.go` · `50` conventions clés · `51` pas d'auto-attribution
 
 **Cross-app Hub (contrat, secrets HMAC, pricing)**
 - `45` invariants CONTRAT-HUB v1.5
@@ -98,7 +96,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `72` commandes de vérité (relever plutôt que croire)
 - `49` commandes tests (Makefile, PostgreSQL `testpg`)
 - `41` sync upstream
-- `42` déploiement — GitOps Nomad
+- `42` déploiement GitOps Nomad · `101` **deux exemplaires, un seul leader** (envoi, IMAP, webhooks, certificat)
 - `43` tests E2E Veridian
 
 **Sécurité & API**
@@ -127,8 +125,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `79` CLI utilisateur à parité : qui peut quoi
 
 **Base de données workspace**
-- `39` DROP DATABASE WITH (FORCE) — wipe orphelin + GC
-- `40` wipe RECORD-FIRST
+- `39`-`40` DROP DATABASE WITH (FORCE), wipe orphelin + GC, record-first
 
 **Cold outbound — débit, caps, warmup (protection réputation)**
 - `03` throttle par provider destinataire

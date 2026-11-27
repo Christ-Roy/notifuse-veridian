@@ -143,6 +143,15 @@ type Manager struct {
 	partial     bool // le certificat servi ne couvre pas tous les noms
 	failures    int
 	nextAttempt time.Time
+	leads       func() bool // nil : cet exemplaire renouvelle seul ; sinon, seul celui qui mène renouvelle (FollowLeader)
+}
+
+// FollowLeader (VER-270, deux exemplaires) : seul l'exemplaire qui mène émet un certificat (deux émissions ACME simultanées
+// sinon). Un suiveur dont le certificat approche de l'échéance relit le stockage, où le leader a posé le neuf, et le sert.
+func (m *Manager) FollowLeader(leads func() bool) {
+	m.mu.Lock()
+	m.leads = leads
+	m.mu.Unlock()
 }
 
 // NewManager construit le gestionnaire. holder reçoit chaque certificat chargé ou émis.
@@ -251,9 +260,17 @@ func (m *Manager) Tick(ctx context.Context) (bool, error) {
 	if cur != nil && cur.Directory == p.Directory {
 		acctKey = cur.AccountKeyPEM // un compte ACME n'existe que chez son annuaire
 	}
+	leads := m.leads
 	m.mu.Unlock()
 
 	if !need || wait {
+		m.checkAlert(now)
+		return false, nil
+	}
+	if leads != nil && !leads() {
+		if err := m.Load(ctx); err != nil {
+			m.logger.WithField("error", err.Error()).Warn("relaycert: relecture du certificat posé par le leader")
+		}
 		m.checkAlert(now)
 		return false, nil
 	}
