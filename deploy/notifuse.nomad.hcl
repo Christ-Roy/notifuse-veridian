@@ -413,7 +413,9 @@ EOH
         # toujours sain) pour liberer de la marge SCHED sur ovh-prod (I07).
         # 08/11 : reserve = memoire non reprenable mesuree (54 Mio) + marge, plafond = pointe (101 Mio) x 7, de quoi tenir une
         # campagne. Avant : 7000 Mio, une fuite de Notifuse pouvait avaler ovh-prod et toutes les apps qui y tournent.
-        memory     = 128
+        # 27/11/2026 (VER-270) : reserve 128 -> 64 Mio. Mesure 7 j, toutes machines : p99 48 Mio, pic 131 Mio
+        # (veridian:nomad_task_memory_used_bytes). 64 = p99 x 1,25 arrondi. memory_max 768 garde (>= 1,25 x pic).
+        memory     = 64
         memory_max = 768
       }
     }
