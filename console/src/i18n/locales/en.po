@@ -556,6 +556,10 @@ msgstr "1. Settings"
 msgid "100 - Thin"
 msgstr "100 - Thin"
 
+#: src/pages/AnalyticsPage.tsx
+msgid "14D"
+msgstr "14D"
+
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx
 msgid "2. Content"
 msgstr "2. Content"
@@ -605,6 +609,10 @@ msgstr "30 per day to start. Raise it gradually, the maximum is {gmailMax}."
 msgid "300 - Light"
 msgstr "300 - Light"
 
+#: src/pages/AnalyticsPage.tsx
+msgid "30D"
+msgstr "30D"
+
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx
 #~ msgid "4. Content"
 #~ msgstr "4. Content"
@@ -625,6 +633,10 @@ msgstr "600 - Semi Bold"
 msgid "700 - Bold"
 msgstr "700 - Bold"
 
+#: src/pages/AnalyticsPage.tsx
+msgid "7D"
+msgstr "7D"
+
 #: src/components/email_builder/ui/FontStyleInput.tsx
 msgid "800 - Extra Bold"
 msgstr "800 - Extra Bold"
@@ -632,6 +644,10 @@ msgstr "800 - Extra Bold"
 #: src/components/email_builder/ui/FontStyleInput.tsx
 msgid "900 - Black"
 msgstr "900 - Black"
+
+#: src/pages/AnalyticsPage.tsx
+msgid "90D"
+msgstr "90D"
 
 #: src/components/segment/input.tsx
 msgid "A branch condition is required..."

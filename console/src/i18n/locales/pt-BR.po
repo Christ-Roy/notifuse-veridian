@@ -556,6 +556,10 @@ msgstr "1. Configuracoes"
 msgid "100 - Thin"
 msgstr "100 - Fina"
 
+#: src/pages/AnalyticsPage.tsx
+msgid "14D"
+msgstr ""
+
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx
 msgid "2. Content"
 msgstr ""
@@ -605,6 +609,10 @@ msgstr ""
 msgid "300 - Light"
 msgstr "300 - Leve"
 
+#: src/pages/AnalyticsPage.tsx
+msgid "30D"
+msgstr ""
+
 #: src/components/broadcasts/UpsertBroadcastDrawer.tsx
 #~ msgid "4. Content"
 #~ msgstr ""
@@ -625,6 +633,10 @@ msgstr "600 - Semi Negrito"
 msgid "700 - Bold"
 msgstr "700 - Negrito"
 
+#: src/pages/AnalyticsPage.tsx
+msgid "7D"
+msgstr ""
+
 #: src/components/email_builder/ui/FontStyleInput.tsx
 msgid "800 - Extra Bold"
 msgstr "800 - Extra Negrito"
@@ -632,6 +644,10 @@ msgstr "800 - Extra Negrito"
 #: src/components/email_builder/ui/FontStyleInput.tsx
 msgid "900 - Black"
 msgstr "900 - Preto"
+
+#: src/pages/AnalyticsPage.tsx
+msgid "90D"
+msgstr ""
 
 #: src/components/segment/input.tsx
 msgid "A branch condition is required..."

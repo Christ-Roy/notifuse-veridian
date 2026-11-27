@@ -133,10 +133,10 @@ export function AnalyticsPage() {
             value={selectedPeriod}
             onChange={handlePeriodChange}
             options={[
-              { label: '7D', value: '7D' },
-              { label: '14D', value: '14D' },
-              { label: '30D', value: '30D' },
-              { label: '90D', value: '90D' }
+              { label: t`7D`, value: '7D' },
+              { label: t`14D`, value: '14D' },
+              { label: t`30D`, value: '30D' },
+              { label: t`90D`, value: '90D' }
             ]}
           />
         </Space>

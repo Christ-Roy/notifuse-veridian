@@ -187,6 +187,22 @@ describe('EmailMetricsChart', () => {
     expect(screen.getByText('0.1%')).toBeInTheDocument()
   })
 
+  // 27/11/2026 : en FR, « Exclus volontairement » (un mot plus large que la colonne span 3) débordait sur le
+  // « 0 % » de la tuile voisine. Chaque titre de tuile coupe désormais ses mots au lieu de déborder.
+  it('lets every tile title break a word too wide for its column', async () => {
+    ;(analyticsService.query as ReturnType<typeof vi.fn>).mockImplementation(
+      totals({ count_sent: 1000, count_failed: 171, count_failed_excluded: 170 })
+    )
+    renderChart()
+    for (const label of ['Deliberately excluded', 'Real failures']) {
+      const title = await screen.findByText(label)
+      const space = title.closest('.ant-space') as HTMLElement
+      expect(space).not.toBeNull()
+      expect(space.style.overflowWrap).toBe('anywhere')
+      expect(space.style.minWidth).toBe('0')
+    }
+  })
+
   it('keeps a single Failed card when the exclusion measure is unavailable', async () => {
     ;(analyticsService.query as ReturnType<typeof vi.fn>).mockImplementation(async (q: Q) => {
       if (q.measures.length === 1 && q.measures[0] === 'count_failed_excluded') {

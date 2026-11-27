@@ -35,6 +35,10 @@ interface EmailMetricsChartProps {
   messageType?: MessageTypeFilter
 }
 
+// Titre de tuile : un mot plus large que sa colonne (span 3) se coupe au lieu de déborder sur la tuile voisine.
+// Vu le 27/11/2026 en FR : « Exclus volontairement » chevauchait le « 0 % » d'« Échec réel ».
+const TILE_TITLE_STYLE: React.CSSProperties = { minWidth: 0, maxWidth: '100%', overflowWrap: 'anywhere', hyphens: 'auto' }
+
 export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
   workspace,
   timeRange = ['2024-01-01', '2024-12-31'],
@@ -289,7 +293,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
             >
               <Statistic
                 title={
-                  <Space className="font-medium">
+                  <Space className="font-medium" style={TILE_TITLE_STYLE}>
                     <FontAwesomeIcon
                       icon={faPaperPlane}
                       style={{ opacity: 0.7 }}
@@ -321,7 +325,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
             <div className="p-2 rounded">
               <Statistic
                 title={
-                  <Space className="font-medium">
+                  <Space className="font-medium" style={TILE_TITLE_STYLE}>
                     <FontAwesomeIcon
                       icon={faComments}
                       style={{ opacity: 0.7 }}
@@ -371,7 +375,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
             >
               <Statistic
                 title={
-                  <Space className="font-medium">
+                  <Space className="font-medium" style={TILE_TITLE_STYLE}>
                     <FontAwesomeIcon
                       icon={faTriangleExclamation}
                       style={{ opacity: 0.7 }}
@@ -398,7 +402,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
             >
               <Statistic
                 title={
-                  <Space className="font-medium">
+                  <Space className="font-medium" style={TILE_TITLE_STYLE}>
                     <FontAwesomeIcon
                       icon={faFaceFrown}
                       style={{ opacity: 0.7 }}
@@ -425,7 +429,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
             >
               <Statistic
                 title={
-                  <Space className="font-medium">
+                  <Space className="font-medium" style={TILE_TITLE_STYLE}>
                     <FontAwesomeIcon
                       icon={faBan}
                       style={{ opacity: 0.7 }}
@@ -452,7 +456,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
             <div className="p-2 rounded">
               <Statistic
                 title={
-                  <Space className="font-medium">
+                  <Space className="font-medium" style={TILE_TITLE_STYLE}>
                     <FontAwesomeIcon
                       icon={faFilterCircleXmark}
                       style={{ opacity: 0.7 }}
@@ -485,7 +489,7 @@ export const EmailMetricsChart: React.FC<EmailMetricsChartProps> = ({
             >
               <Statistic
                 title={
-                  <Space className="font-medium">
+                  <Space className="font-medium" style={TILE_TITLE_STYLE}>
                     <FontAwesomeIcon
                       icon={faCircleXmark}
                       style={{ opacity: 0.7 }}
