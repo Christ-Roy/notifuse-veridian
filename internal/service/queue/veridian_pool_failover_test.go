@@ -1000,3 +1000,54 @@ func TestVeridianSelectSendable_ManualMailIgnoresProspectingGates(t *testing.T) 
 	paused := veridianTestPoolWorkspace([]string{"nord"}, []domain.Integration{nord}, nil)
 	assert.Nil(t, env.worker.veridianSelectSendableIntegration(paused, entry(domain.EmailQueueSourceMail), paused.GetIntegrationByID("nord")).Candidate)
 }
+
+// N10 (27/11/2026, ASD) : une exclusion de classe posée sur un profil APRÈS l'entrée d'un contact dans une séquence
+// doit refuser aussi les relances de cette séquence. Signalement : « 18 relances parties vers free.fr du 11 au 14/11
+// malgré l'exclusion ». Mesure en prod : les 19 lignes étaient des refus (failed_at, sent_at nul, status_info
+// « excluded_provider_class:free »), rien n'était parti. Ce test garde la règle : relance d'une séquence ouverte
+// (J0 parti 72 h avant par le profil ancre, entrée sans aucune liste d'exclusion figée dans sa charge), profil et
+// pool excluant free, destinataire @free.fr : aucun SMTP, échec permanent tracé avec la classe, entrée supprimée.
+func TestEmailQueueWorker_ProcessEntry_RelanceDeSequenceOuverte_ExclusionPoseeApres_Refusee(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	nord := veridianTestPoolIntegration("nord", "hello@nord-propre.example")
+	nord.EmailProvider.VeridianExcludedProviderClasses = []string{"bouygues", "zoho", "free"}
+	relai := veridianTestPoolIntegration("relai", "hello@relai-agence.example")
+	relai.EmailProvider.VeridianExcludedProviderClasses = []string{"bouygues", "zoho", "free"}
+	workspace := veridianTestPoolWorkspace([]string{"nord", "relai"}, []domain.Integration{nord, relai}, nil)
+
+	automationID := "prospection5mails"
+	contact := "eleveur@free.fr"
+	j0SentAt := time.Now().Add(-72 * time.Hour)
+	env.mockMessageHistoryRepo.EXPECT().
+		GetByContact(gomock.Any(), "ws-1", gomock.Any(), contact, gomock.Any(), gomock.Any()).
+		Return([]*domain.MessageHistory{{
+			ID: "j0", AutomationID: &automationID, SentAt: &j0SentAt,
+			VeridianProfileID: "nord", VeridianSenderEmail: "hello@nord-propre.example",
+		}}, 1, nil).AnyTimes()
+	veridianAllowAutomationSend(t, env, automationID, contact)
+	veridianExpectHealthyReputation(env, "ws-1", "nord-propre.example")
+	veridianExpectHealthyReputation(env, "ws-1", "relai-agence.example")
+
+	entry := veridianTestEntry("j1", contact, domain.EmailQueuePayload{})
+	entry.SourceType = domain.EmailQueueSourceAutomation
+	entry.SourceID = automationID
+	entry.IntegrationID = "nord"
+	entry.CreatedAt = time.Now().Add(-96 * time.Hour) // en file avant la pose de l'exclusion
+	entry.Payload.FromAddress = "hello@nord-propre.example"
+	require.Empty(t, entry.Payload.VeridianExcludedProviderClasses, "aucune liste figée : c'est la config vivante du profil qui doit décider")
+
+	var trace *domain.MessageHistory
+	env.mockQueueRepo.EXPECT().MarkAsProcessing(gomock.Any(), "ws-1", "j1").Return(nil)
+	env.mockMessageHistoryRepo.EXPECT().Upsert(gomock.Any(), "ws-1", gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, _ string, m *domain.MessageHistory) error { trace = m; return nil })
+	env.mockQueueRepo.EXPECT().Delete(gomock.Any(), "ws-1", "j1").Return(nil)
+	env.mockEmailService.EXPECT().SendEmail(gomock.Any(), gomock.Any(), true).Times(0)
+
+	env.worker.processEntry(workspace, entry)
+
+	require.NotNil(t, trace, "le refus doit laisser une trace dans l'historique")
+	assert.Nil(t, trace.SentAt, "la relance ne doit pas être marquée envoyée")
+	require.NotNil(t, trace.FailedAt)
+	require.NotNil(t, trace.StatusInfo)
+	assert.Contains(t, *trace.StatusInfo, "excluded_provider_class:free")
+}
