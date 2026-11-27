@@ -48,7 +48,7 @@ on:
         required: false
         default: 'false'
 
-# === Veridian fix 2026-10-10 — un run qui déploie la prod n'est JAMAIS annulé ===
+# === Veridian fix 2026-10-10 (historique, remplacé le 27/11 par le groupe unique plus bas) — un run qui déploie la prod n est JAMAIS annulé ===
 # Sémantique GitHub : annuler un run annule TOUS ses jobs, quel que soit le
 # `concurrency` posé au niveau du job. Un groupe au niveau job ne protège donc
 # pas deploy-prod / e2e-prod / rollback d'une annulation du run parent (le run
@@ -64,15 +64,14 @@ on:
 #     prod remplace le 2e encore en file (qui n'a rien déployé).
 #   - plus de runner permanent : chaque job a son runner JIT ou hébergé, la
 #     sérialisation ne dépend que de ce groupe.
+# 27/11/2026 (VER-270) : UN SEUL groupe pour tout run de la branche, push ou promotion. Avant, les deux groupes ci-dessus
+# laissaient un push et une promotion déployer le MÊME staging en même temps : leurs E2E se croisaient (« redirect count
+# exceeded », runs 46035890561 et 46037016513). Désormais un seul run touche le staging à la fois, les autres attendent.
+#   - un run en cours n'est jamais annulé (cancel-in-progress:false), qu'il déploie la prod ou non ;
+#   - limite GitHub inchangée : UN run en attente par groupe, le plus récent remplace le précédent encore en file (qui n'a
+#     rien déployé). Une promotion en file peut donc être remplacée par un push : relancer la promotion après lui.
 concurrency:
-  group: ${{ (github.ref == 'refs/heads/veridian'
-    && ((github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_prod == 'true')
-      || (github.event_name == 'push'
-        && contains(github.event.head_commit.message, '[risk:low]')
-        && !contains(github.event.head_commit.message, '[skip-prod]')
-        && !contains(github.event.head_commit.message, '[wip]')))) && format('veridian-ci-prod-{0}', github.ref) || format('veridian-ci-{0}', github.ref) }}
-  # 24/11/2026 : un push ordinaire attend aussi (il annulait le run précédent : 6 runs perdus ce jour-là). Seule une PR
-  # annule son propre run dépassé.
+  group: ${{ format('veridian-ci-{0}', github.ref) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
