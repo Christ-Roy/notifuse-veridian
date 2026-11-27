@@ -97,6 +97,22 @@ respecté, 400 non rejoué, 5xx rejoué après `Retry-After` puis attente croiss
 Signature : vecteur officiel Standard Webhooks, bibliothèque de référence et portage de `veridian-hub/lib/evenements/signature.ts` ; la
 routine du Hub elle-même accepte le vecteur (exécutée par `tsx` le 26/11).
 
+## Ouvrir à toutes les orgs (état du 27/11/2026)
+
+La vraie porte est l'abonnement du Hub par espace (`veridianhubevenements`, actif) : sans lui, rien n'entre en file. La liste blanche
+`VERIDIAN_ACTIVITE_WORKSPACES` (aujourd'hui `robertbrunon`, VER-267) n'est qu'un second verrou. La vider demande, dans l'ordre :
+1. **Le Hub accepte les lots de toute org** (il ne les sert qu'à ses orgs de test et à l'org Veridian) et n'allume l'abonnement
+   notifuse>crm que là où le CRM de l'org porte Liaisons (outil `app_evenements_mail`) ; sinon les lots échouent et l'espace passe
+   en `workspaces_failing`.
+2. **Arriéré relevé juste avant** : `veridian_activite_pending_events` et `_workspaces_pending` (27/11 10:38Z : 0 et 0). Un espace
+   abonné mais hors liste garde 7 jours de file, qui partirait d'un coup : à décider (envoyer l'historique ou purger).
+3. **Capacité** : 200 événements par lot et par passe de 30 s et par espace ; coût des déclencheurs mesuré plus haut. Le Hub et
+   chaque CRM doivent tenir le pic d'un envoi de campagne (une ligne par destinataire, puis ouvertures et clics).
+4. **Alertes** déjà posées (retard, Hub en échec 1 h, lots refusés, worker muet, métriques absentes) : rien à ajouter.
+5. **Données** : adresses, objet, nom affiché et hôte du clic vont au CRM de la MÊME org (jamais le corps) ; à mentionner au
+   registre des traitements et aux CGU si ce n'est pas fait.
+Puis : `VERIDIAN_ACTIVITE_WORKSPACES=` (vide) dans `deploy/notifuse.nomad.hcl`, promotion, mesure de `events_total{accepte}` par org.
+
 ## Dettes
 
 - **Lien de tenant d'épreuve sur `coldtest` (staging, 26/11/2026)** : `38bfa0a5-cade-4724-acbf-34d723fa9bba`, posé par `hub:tenant-link` pour
