@@ -7,9 +7,12 @@ import (
 	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
+	"github.com/Notifuse/notifuse/internal/veridian/mailbox"
 )
 
-func TestSend_BuildsQueueEntryWithSameGatesAsSequences(t *testing.T) {
+// 27/11/2026 : un mail écrit à la main n'est plus un envoi de prospection. Sans attente configurée, l'API répond
+// « en cours » (202) ; l'entrée passe devant les séquences.
+func TestSend_ManualMailBuildsAPriorityEntry(t *testing.T) {
 	e, _ := newEnv(t)
 	code, out, _ := e.do(t, "POST", "/api/veridian/mail.messages.send", map[string]any{
 		"workspace_id": ws, "profile_id": "prof1", "to": "Paul Martin <Paul@Cabinet.fr>", "subject": "Une question", "text": "Bonjour Paul,\nvoir https://asd.fr",
@@ -17,7 +20,7 @@ func TestSend_BuildsQueueEntryWithSameGatesAsSequences(t *testing.T) {
 	if code != 202 {
 		t.Fatalf("%d %v", code, out)
 	}
-	if out["status"] != "queued" || !strings.HasPrefix(out["message_id"].(string), "ws1_") || out["queue_entry_id"] == "" || out["thread_id"] == "" {
+	if out["status"] != "sending" || !strings.HasPrefix(out["message_id"].(string), "ws1_") || out["queue_entry_id"] == "" || out["thread_id"] == "" {
 		t.Fatalf("%v", out)
 	}
 	if len(e.queue.entries) != 1 {
@@ -36,8 +39,11 @@ func TestSend_BuildsQueueEntryWithSameGatesAsSequences(t *testing.T) {
 	if p.EmailOptions.InReplyTo != "" || len(p.EmailOptions.References) != 0 {
 		t.Fatal("un premier mail n'a pas de fil")
 	}
-	if en.Priority != domain.EmailQueuePriorityMarketing {
-		t.Fatalf("un premier mail passe en priorité commerciale normale: %d", en.Priority)
+	if en.Priority != domain.EmailQueuePriorityTransactional {
+		t.Fatalf("un mail écrit à la main ne fait pas la queue derrière les séquences: %d", en.Priority)
+	}
+	if strings.Contains(out["note"].(string), "file") || strings.Contains(out["note"].(string), "plafond") {
+		t.Fatalf("plus de « en file, mêmes portes que les séquences » : %q", out["note"])
 	}
 	got := e.auth.granted()
 	if len(got) != 2 || got[0] != (grant{"message_history", "write"}) || got[1] != (grant{"transactional", "write"}) {
@@ -170,4 +176,67 @@ func TestActorLabel(t *testing.T) {
 		t.Fatal("libellé d'acteur")
 	}
 	_ = time.Now
+}
+
+// Comme une messagerie : l'API attend l'issue réelle. Parti = 200 « sent » ; refusé par le relais = 200 « failed »
+// avec la raison ; rien au-delà de l'attente = 202 « sending » (le mail reste en file, jamais perdu).
+func TestSend_WaitsForTheRealOutcome(t *testing.T) {
+	send := func(t *testing.T, e *env) (int, map[string]any) {
+		code, out, _ := e.do(t, "POST", "/api/veridian/mail.messages.send", map[string]any{
+			"workspace_id": ws, "profile_id": "prof1", "to": "paul@cabinet.fr", "subject": "Une question", "text": "Bonjour Paul",
+		})
+		return code, out
+	}
+	wait := func(e *env, d time.Duration) {
+		qs := e.svc.Sender.(*QueueSender)
+		qs.Wait, qs.Poll = d, 10*time.Millisecond
+	}
+
+	t.Run("parti", func(t *testing.T) {
+		e, _ := newEnv(t)
+		wait(e, 3*time.Second)
+		e.queue.worker = func(en *domain.EmailQueueEntry) {
+			time.Sleep(50 * time.Millisecond)
+			if _, err := e.ing.RecordSent(context.Background(), mailbox.SentInput{WorkspaceID: ws, MessageHistoryID: en.MessageID,
+				ContactEmail: en.ContactEmail, FromAddress: en.Payload.FromAddress, Subject: en.Payload.Subject, Text: "Bonjour Paul",
+				ProfileID: en.IntegrationID, SentAt: time.Now(), BodySource: mailbox.BodyCaptured}); err != nil {
+				t.Error(err)
+			}
+		}
+		code, out := send(t, e)
+		if code != 200 || out["status"] != "sent" || out["note"] != "envoyé" {
+			t.Fatalf("%d %v", code, out)
+		}
+	})
+
+	t.Run("refusé par le relais, avec la raison", func(t *testing.T) {
+		e, _ := newEnv(t)
+		wait(e, 3*time.Second)
+		if _, err := e.db.Exec(`ALTER TABLE message_history ADD COLUMN IF NOT EXISTS status_info TEXT`); err != nil {
+			t.Fatal(err)
+		}
+		e.queue.worker = func(en *domain.EmailQueueEntry) {
+			time.Sleep(50 * time.Millisecond)
+			if _, err := e.db.Exec(`INSERT INTO message_history (id, contact_email, failed_at, status_info) VALUES ($1, $2, NOW(), '550 5.1.1 user unknown')`, en.MessageID, en.ContactEmail); err != nil {
+				t.Error(err)
+			}
+		}
+		code, out := send(t, e)
+		if code != 200 || out["status"] != "failed" || out["error"] != "550 5.1.1 user unknown" {
+			t.Fatalf("%d %v", code, out)
+		}
+	})
+
+	t.Run("pas d'issue dans l'attente : en cours", func(t *testing.T) {
+		e, _ := newEnv(t)
+		wait(e, 150*time.Millisecond)
+		start := time.Now()
+		code, out := send(t, e)
+		if code != 202 || out["status"] != "sending" {
+			t.Fatalf("%d %v", code, out)
+		}
+		if el := time.Since(start); el > 2*time.Second {
+			t.Fatalf("l'attente est bornée : %s", el)
+		}
+	})
 }

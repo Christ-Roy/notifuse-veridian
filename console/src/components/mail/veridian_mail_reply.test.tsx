@@ -34,13 +34,13 @@ describe('répondre depuis la boîte', () => {
   })
 
   it('rien ne part sans confirmation explicite, puis le profil, l’objet et le texte partent avec le message d’origine', async () => {
-    vi.mocked(mailService.reply).mockResolvedValue({ message_id: 'ws_x', status: 'queued', note: 'en file : part quand les plafonds le permettent', thread_id: 'th-1' })
+    vi.mocked(mailService.reply).mockResolvedValue({ message_id: 'ws_x', status: 'sending', note: 'envoi en cours', thread_id: 'th-1' })
     const onSent = await open()
     await user.type(screen.getByTestId('reply-text'), 'Bonjour Docteur, jeudi 10h vous convient ?')
     await user.click(screen.getByRole('button', { name: /Review and send/ }))
     expect(mailService.reply).not.toHaveBeenCalled()
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByTestId('reply-confirm-text')).toHaveTextContent('This mail will leave with the same limits as the sequences.')
+    expect(within(dialog).getByTestId('reply-confirm-text')).toHaveTextContent('This mail leaves right away, like from any mailbox.')
     await user.click(within(dialog).getByRole('button', { name: 'Send' }))
     await waitFor(() => expect(mailService.reply).toHaveBeenCalledTimes(1))
     expect(mailService.reply).toHaveBeenCalledWith({
@@ -50,9 +50,10 @@ describe('répondre depuis la boîte', () => {
       subject: 'Re: Compléments articulaires pour votre clinique',
       text: 'Bonjour Docteur, jeudi 10h vous convient ?'
     })
-    const queued = await screen.findByTestId('reply-queued')
-    expect(queued).toHaveTextContent('Queued')
-    expect(queued).toHaveTextContent('en file : part quand les plafonds le permettent')
+    const outcome = await screen.findByTestId('reply-outcome')
+    expect(outcome).toHaveAttribute('data-outcome', 'sending')
+    expect(outcome).toHaveTextContent('Sending in progress')
+    expect(outcome).not.toHaveTextContent(/queue|limits/i)
     expect(onSent).toHaveBeenCalledTimes(1)
   })
 

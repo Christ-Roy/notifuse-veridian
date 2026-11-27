@@ -482,13 +482,20 @@ def _send(a, route, body, what):
     _fail(st, data)
     if a.json:
         print(json.dumps(data, indent=2, ensure_ascii=False))
+    elif data.get("status") == "sent":
+        print(f"✓ envoyé : {data.get('message_id')} · fil {data.get('thread_id')}")
+    elif data.get("status") == "failed":
+        print(f"✗ refusé par le relais : {data.get('error') or 'sans raison donnée'} ({data.get('message_id')})", file=sys.stderr)
     else:
-        print(f"✓ en file : {data.get('message_id')} · fil {data.get('thread_id')}\n  {data.get('note')}")
+        print(f"… envoi en cours : {data.get('message_id')} · fil {data.get('thread_id')}\n  {data.get('note')}")
+    # 27/11 : un mail écrit à la main part tout de suite (comme une messagerie) ; un refus du relais est un échec.
+    if data.get("status") == "failed":
+        sys.exit(1)
 
 
 def cmd_send(a):
     body = {"profile_id": a.profile, "to": a.to, "subject": a.subject}
-    _send(a, "/api/veridian/mail.messages.send", body, "mettre ce mail en file (mêmes plafonds que les séquences)")
+    _send(a, "/api/veridian/mail.messages.send", body, "envoyer ce mail tout de suite")
 
 
 def cmd_reply(a):
@@ -499,7 +506,7 @@ def cmd_reply(a):
         body["to"] = a.to
     if a.subject:
         body["subject"] = a.subject
-    _send(a, "/api/veridian/mail.messages.reply", body, "mettre cette réponse en file (même profil, dans le fil)")
+    _send(a, "/api/veridian/mail.messages.reply", body, "envoyer cette réponse tout de suite (même profil, dans le fil)")
 
 
 def parse_sse(lines):
@@ -693,7 +700,7 @@ def register(sub):
     sp.add_argument("--clear-labels", action="store_true")
     jsonflag(sp)
 
-    sp = add("mail:send", "envoie un mail par un profil, mêmes plafonds et portes que les séquences (sans --yes : simulation)", cmd_send, ["/api/veridian/mail.messages.send"])
+    sp = add("mail:send", "envoie un mail par un profil, tout de suite, comme une messagerie (sans --yes : simulation)", cmd_send, ["/api/veridian/mail.messages.send"])
     sp.add_argument("--profile", required=True, help="id du profil d'envoi (mail:boxes)")
     sp.add_argument("--to", required=True)
     sp.add_argument("--subject", required=True)
@@ -701,7 +708,7 @@ def register(sub):
     sp.add_argument("--text")
     sp.add_argument("--text-file")
     sp.add_argument("--html-file")
-    sp.add_argument("--yes", action="store_true", help="envoie pour de vrai (met en file)")
+    sp.add_argument("--yes", action="store_true", help="envoie pour de vrai")
     jsonflag(sp)
 
     sp = add("mail:reply", "répond à un mail reçu, dans son fil (In-Reply-To, References), par le profil qui l'a reçu (sans --yes : simulation)", cmd_reply, ["/api/veridian/mail.messages.reply"])

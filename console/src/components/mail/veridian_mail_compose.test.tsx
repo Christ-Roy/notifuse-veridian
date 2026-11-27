@@ -33,7 +33,7 @@ describe('nouveau message', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('propose le destinataire ; rien ne part sans texte ni sans confirmation', async () => {
-    vi.mocked(mailService.send).mockResolvedValue({ message_id: 'x', status: 'queued' })
+    vi.mocked(mailService.send).mockResolvedValue({ message_id: 'x', status: 'sent', note: 'envoyé' })
     open()
     expect(screen.getByTestId('compose-to')).toHaveValue('ana@client.example')
     expect(screen.getByRole('button', { name: /Review and send/ })).toBeDisabled()
@@ -42,7 +42,21 @@ describe('nouveau message', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Send' }))
     await waitFor(() => expect(mailService.send).toHaveBeenCalledTimes(1))
     expect(mailService.send).toHaveBeenCalledWith({ workspace_id: WS, profile_id: one[0].profile_id, to: 'ana@client.example', subject: 'Bonjour', text: 'Un mot.' })
-    expect(await screen.findByTestId('compose-queued')).toHaveTextContent('Queued')
+    const outcome = await screen.findByTestId('compose-outcome')
+    expect(outcome).toHaveAttribute('data-outcome', 'sent')
+    expect(outcome).toHaveTextContent('Sent')
+    expect(outcome).not.toHaveTextContent(/queue|limits/i)
+  })
+
+  it('le relais refuse : la raison du relais est affichée, pas « en file »', async () => {
+    vi.mocked(mailService.send).mockResolvedValue({ message_id: 'x', status: 'failed', error: '550 5.1.1 user unknown' })
+    open()
+    const dialog = await fill()
+    expect(within(dialog).getByText('This mail leaves right away, like from any mailbox.')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Send' }))
+    const outcome = await screen.findByTestId('compose-outcome')
+    expect(outcome).toHaveAttribute('data-outcome', 'failed')
+    expect(outcome).toHaveTextContent('550 5.1.1 user unknown')
   })
 
   it('refus 409 : raison affichée, texte conservé', async () => {

@@ -26,15 +26,22 @@ type EnqueueRepo interface {
 	Enqueue(ctx context.Context, workspaceID string, entries []*domain.EmailQueueEntry) error
 }
 
-// QueueSender met le mail dans la MÊME file que les séquences : le worker lui applique les mêmes
-// portes (fusible de réputation, plafonds du profil, de la classe de destinataire et de
-// l'adresse émettrice, chauffe, fenêtre d'envoi, cadence) puis l'envoie par le relais du profil.
-// Aucune voie parallèle : un mail envoyé par l'API compte dans les plafonds du jour.
+// QueueSender confie le mail écrit à la main au worker de Notifuse, qui l'envoie par le relais du profil.
+//
+// 27/11/2026 (Robert : « si on veut en envoyer un à la main, faut qu'il parte tout de suite ») : un mail de la boîte
+// n'est plus un envoi de prospection. Le worker ne lui applique aucune porte commerciale (fenêtre, débits et plafonds par
+// classe, chauffe, fusible, étalement, quota du jour : queue/veridian_pool_failover.go), il passe devant les séquences
+// (priorité transactionnelle) et part au tick suivant (1 s). Restent : profil en pause et contact supprimé (refusés
+// ici), transport en panne (circuit ouvert), adresse invalide. L'API attend l'issue réelle au plus Wait et répond
+// « parti », « refusé » avec la raison, ou « en cours » au-delà.
 type QueueSender struct {
 	Queue EnqueueRepo
 	WS    WorkspaceGetter
 	Store *mailbox.Store
 	Now   func() time.Time
+	// Wait : attente de l'issue (0 = aucune, l'API répond « en cours ») ; Poll : pas de relecture (défaut 250 ms).
+	Wait time.Duration
+	Poll time.Duration
 }
 
 // SendMail valide, vérifie les droits d'écriture et met en file (messages.send, messages.reply).
@@ -166,10 +173,8 @@ func (q *QueueSender) Send(ctx context.Context, req SendRequest, actor Actor) (*
 		html = mailbox.TextToHTML(req.Text)
 		plainOnly = true
 	}
-	prio := domain.EmailQueuePriorityMarketing
-	if parent != nil {
-		prio = domain.EmailQueuePriorityTransactional // une réponse à un humain ne fait pas la queue derrière les relances
-	}
+	// Un mail écrit à la main (premier mail comme réponse) ne fait jamais la queue derrière les séquences.
+	prio := domain.EmailQueuePriorityTransactional
 	entry := &domain.EmailQueueEntry{
 		ID: uuid.NewString(), Status: domain.EmailQueueStatusPending, Priority: prio,
 		SourceType: domain.EmailQueueSourceMail, SourceID: truncID(actor.ID),
@@ -189,10 +194,50 @@ func (q *QueueSender) Send(ctx context.Context, req SendRequest, actor Actor) (*
 	if thread == "" {
 		thread = mailbox.ThreadIDFromRoot(id)
 	}
-	return &SendResult{
-		MessageID: storedID, QueueEntry: entry.ID, Status: "queued", ThreadID: thread,
-		Note: "en file : le mail part quand les plafonds du profil le permettent (mêmes portes que les séquences) ; il apparaît dans le fil dès qu'il est parti",
-	}, nil
+	res := &SendResult{
+		MessageID: storedID, QueueEntry: entry.ID, Status: mailbox.SendStatePending, ThreadID: thread,
+		Note: "envoi en cours : il apparaît dans le fil dès que le relais l'a accepté",
+	}
+	q.awaitOutcome(ctx, req.Workspace, storedID, res)
+	return res, nil
+}
+
+// awaitOutcome relit l'issue de l'envoi jusqu'à Wait : parti (rangé dans la boîte) ou refusé (failed_at, avec la
+// raison). Au-delà, ou si la lecture échoue, la réponse reste « en cours » : le mail n'est jamais perdu, il est en file.
+func (q *QueueSender) awaitOutcome(ctx context.Context, ws, historyID string, res *SendResult) {
+	if q.Wait <= 0 || q.Store == nil {
+		return
+	}
+	poll := q.Poll
+	if poll <= 0 {
+		poll = 250 * time.Millisecond
+	}
+	deadline := time.NewTimer(q.Wait)
+	defer deadline.Stop()
+	tick := time.NewTicker(poll)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-deadline.C:
+			return
+		case <-tick.C:
+		}
+		out, err := q.Store.SendOutcome(ctx, ws, historyID)
+		if err != nil {
+			return
+		}
+		switch out.State {
+		case mailbox.SendStateSent:
+			res.Status, res.Note = mailbox.SendStateSent, "envoyé"
+			return
+		case mailbox.SendStateFailed:
+			res.Status, res.Error = mailbox.SendStateFailed, out.Reason
+			res.Note = "le relais n'a pas accepté le mail"
+			return
+		}
+	}
 }
 
 // replyAddress : où répondre (Reply-To du message reçu, sinon l'expéditeur, sinon le contact).

@@ -387,6 +387,17 @@ func (w *EmailQueueWorker) veridianEvaluateCandidate(
 ) veridianCandidateEvaluation {
 	ev := veridianCandidateEvaluation{Candidate: cand}
 
+	// 27/11/2026 (Robert) : un mail écrit à la main depuis la boîte part tout de suite, comme dans une vraie messagerie.
+	// Aucune porte de prospection ne le gouverne (exclusion de classe, fusible, débit, plafonds, chauffe, fenêtre,
+	// relais, étalement) ; la pause du profil et le transport en panne sont vérifiés avant, dans la boucle des candidats.
+	if veridianIsManualMail(entry) {
+		for _, g := range veridianCanonicalGateOrder {
+			ev.Gates = append(ev.Gates, veridianSkippedVerdict(g, "manual mail from the box: prospecting gates do not apply"))
+		}
+		ev.Outcome = "selected"
+		return ev
+	}
+
 	excl := w.veridianExcludedClassVerdict(workspace, cand.Provider, entry)
 	ev.Gates = append(ev.Gates, excl)
 	if excl.Blocked() {
@@ -579,4 +590,9 @@ func veridianMinDuration(a, b time.Duration) time.Duration {
 		return b
 	}
 	return a
+}
+
+// veridianIsManualMail : mail écrit à la main depuis la boîte (mail.messages.send|reply).
+func veridianIsManualMail(entry *domain.EmailQueueEntry) bool {
+	return entry != nil && entry.SourceType == domain.EmailQueueSourceMail
 }

@@ -5,6 +5,7 @@ import { useLingui } from '@lingui/react/macro'
 
 import { mailErrorKind, mailService, refusalOf, type Mailbox, type MailRefusal, type MailSendResult } from '../../services/api/veridian_mail'
 import { exactDate, useMailLabels } from './veridian_mail_labels'
+import { MailSendOutcome } from './veridian_mail_send_outcome'
 import { isRecipient } from './veridian_mail_rules'
 
 const MAX_TEXT = 200_000
@@ -66,13 +67,7 @@ const ComposeInner: React.FC<ComposeProps & { to: string }> = ({ workspaceId, to
   if (queued) {
     return (
       <Space direction="vertical" style={{ width: '100%' }}>
-        <Alert
-          type="success"
-          showIcon
-          data-testid="compose-queued"
-          message={t`Queued: your message will leave as soon as the sending limits allow it`}
-          description={queued.note || t`It will appear in the conversation once the relay has accepted it.`}
-        />
+        <MailSendOutcome result={queued} testId="compose-outcome" />
         <Button onClick={onClose}>{t`Close`}</Button>
       </Space>
     )
@@ -133,7 +128,7 @@ const ComposeInner: React.FC<ComposeProps & { to: string }> = ({ workspaceId, to
         onCancel={() => !sending && setConfirming(false)}
         maskClosable={false}
       >
-        <p style={{ fontWeight: 600 }}>{t`This mail will leave with the same limits as the sequences.`}</p>
+        <p style={{ fontWeight: 600 }}>{t`This mail leaves right away, like from any mailbox.`}</p>
         <dl style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '4px 12px', margin: 0, overflowWrap: 'anywhere' }}>
           <dt>{t`To`}</dt>
           <dd style={{ margin: 0 }}>{to.trim()}</dd>

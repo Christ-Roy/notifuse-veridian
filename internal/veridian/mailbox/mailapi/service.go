@@ -449,6 +449,8 @@ type SendResult struct {
 	Status     string `json:"status"`
 	ThreadID   string `json:"thread_id,omitempty"`
 	Note       string `json:"note,omitempty"`
+	// Error : raison du refus du relais quand Status = « failed » (texte SMTP, jamais un secret).
+	Error string `json:"error,omitempty"`
 }
 
 // ErrNotImplemented : fonction non branchée.

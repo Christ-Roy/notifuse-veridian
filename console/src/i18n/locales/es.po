@@ -7227,8 +7227,7 @@ msgstr "Deja de funcionar de inmediato y no se puede reabrir. Las aplicaciones q
 msgid "It was sent before the unified inbox and its template could not be rebuilt. Headers and delivery status remain readable."
 msgstr ""
 
-#: src/components/mail/veridian_mail_compose.tsx
-#: src/components/mail/veridian_mail_reply.tsx
+#: src/components/mail/veridian_mail_send_outcome.tsx
 msgid "It will appear in the conversation once the relay has accepted it."
 msgstr ""
 
@@ -8679,6 +8678,10 @@ msgstr ""
 
 #: src/components/send_queue/veridian_queue_labels.ts
 msgid "No reason"
+msgstr ""
+
+#: src/components/mail/veridian_mail_send_outcome.tsx
+msgid "No reason given by the relay."
 msgstr ""
 
 #: src/components/email_builder/ui/BackgroundInput.tsx
@@ -10275,12 +10278,12 @@ msgid "Queued emails will not be sent. In-flight sends will complete."
 msgstr ""
 
 #: src/components/mail/veridian_mail_compose.tsx
-msgid "Queued: your message will leave as soon as the sending limits allow it"
-msgstr "En cola: su mensaje saldrá en cuanto los límites de envío lo permitan"
+#~ msgid "Queued: your message will leave as soon as the sending limits allow it"
+#~ msgstr "En cola: su mensaje saldrá en cuanto los límites de envío lo permitan"
 
 #: src/components/mail/veridian_mail_reply.tsx
-msgid "Queued: your reply will leave as soon as the sending limits allow it"
-msgstr ""
+#~ msgid "Queued: your reply will leave as soon as the sending limits allow it"
+#~ msgstr ""
 
 #: src/components/send_queue/veridian_queue_labels.ts
 msgid "Quota denied"
@@ -11916,6 +11919,10 @@ msgstr ""
 msgid "Sending emails..."
 msgstr "Enviando correos..."
 
+#: src/components/mail/veridian_mail_send_outcome.tsx
+msgid "Sending in progress"
+msgstr ""
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Sending infrastructures"
@@ -12049,6 +12056,7 @@ msgstr "enviado"
 #: src/components/mail/veridian_mail_header.tsx
 #: src/components/mail/veridian_mail_labels.ts
 #: src/components/mail/veridian_mail_list.tsx
+#: src/components/mail/veridian_mail_send_outcome.tsx
 #: src/components/messages/MessageHistoryTab.tsx
 #: src/components/messages/MessageHistoryTab.tsx
 #: src/components/messages/MessageHistoryTable.tsx
@@ -13473,6 +13481,14 @@ msgstr ""
 msgid "The raw message was read truncated (size limit): the end of the mail may be missing."
 msgstr ""
 
+#: src/components/mail/veridian_mail_send_outcome.tsx
+msgid "The relay accepted it; it is in the conversation."
+msgstr ""
+
+#: src/components/mail/veridian_mail_send_outcome.tsx
+msgid "The relay refused the message"
+msgstr ""
+
 #: src/pages/AnalyticsPage.tsx
 msgid "The requested workspace could not be found."
 msgstr "No se pudo encontrar el espacio de trabajo solicitado."
@@ -13803,8 +13819,13 @@ msgstr "Este es tu editor visual de correo. Haz clic en cualquier elemento de tu
 
 #: src/components/mail/veridian_mail_compose.tsx
 #: src/components/mail/veridian_mail_reply.tsx
-msgid "This mail will leave with the same limits as the sequences."
+msgid "This mail leaves right away, like from any mailbox."
 msgstr ""
+
+#: src/components/mail/veridian_mail_compose.tsx
+#: src/components/mail/veridian_mail_reply.tsx
+#~ msgid "This mail will leave with the same limits as the sequences."
+#~ msgstr ""
 
 #: src/components/mail/veridian_mail_body.tsx
 msgid "This message has no content."

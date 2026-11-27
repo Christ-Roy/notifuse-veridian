@@ -72,6 +72,8 @@ type fakeQueue struct {
 	mu      sync.Mutex
 	entries []*domain.EmailQueueEntry
 	err     error
+	// worker : ce que ferait le worker de Notifuse de l'entrée (envoi rangé dans la boîte, échec consigné...).
+	worker func(*domain.EmailQueueEntry)
 }
 
 func (q *fakeQueue) Enqueue(_ context.Context, _ string, e []*domain.EmailQueueEntry) error {
@@ -81,6 +83,11 @@ func (q *fakeQueue) Enqueue(_ context.Context, _ string, e []*domain.EmailQueueE
 		return q.err
 	}
 	q.entries = append(q.entries, e...)
+	if q.worker != nil {
+		for _, en := range e {
+			go q.worker(en)
+		}
+	}
 	return nil
 }
 

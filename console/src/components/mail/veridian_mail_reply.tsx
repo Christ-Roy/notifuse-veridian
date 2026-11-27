@@ -13,6 +13,7 @@ import {
   type MailSendResult
 } from '../../services/api/veridian_mail'
 import { exactDate, useMailLabels } from './veridian_mail_labels'
+import { MailSendOutcome } from './veridian_mail_send_outcome'
 import { defaultReplyProfile, replySubject, replyTarget } from './veridian_mail_rules'
 
 const MAX_TEXT = 200_000
@@ -83,16 +84,7 @@ const ReplyInner: React.FC<ReplyProps> = ({ workspaceId, message, mailboxes, onS
   return (
     <section aria-label={t`Reply`} data-testid="reply-section">
       {queued && (
-        <Alert
-          type="success"
-          showIcon
-          data-testid="reply-queued"
-          style={{ marginBottom: 12 }}
-          message={t`Queued: your reply will leave as soon as the sending limits allow it`}
-          description={queued.note || t`It will appear in the conversation once the relay has accepted it.`}
-          closable
-          onClose={() => setQueued(null)}
-        />
+        <MailSendOutcome result={queued} testId="reply-outcome" style={{ marginBottom: 12 }} onClose={() => setQueued(null)} />
       )}
       {refusal && (
         <Alert
@@ -165,7 +157,7 @@ const ReplyInner: React.FC<ReplyProps> = ({ workspaceId, message, mailboxes, onS
         maskClosable={false}
       >
         <p data-testid="reply-confirm-text" style={{ fontWeight: 600 }}>
-          {t`This mail will leave with the same limits as the sequences.`}
+          {t`This mail leaves right away, like from any mailbox.`}
         </p>
         <dl style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '4px 12px', margin: 0 }}>
           <dt>{t`To`}</dt>

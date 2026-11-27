@@ -309,3 +309,27 @@ func TestVeridianReserveDailyQuota_LegacyFreemailTagReservesUnderFAI(t *testing.
 		assert.Equal(t, domain.VeridianDefaultCapForClass(want), repo.specs[0].Cap, email)
 	}
 }
+
+// 27/11/2026 : un mail écrit à la main ne consomme ni n'attend le quota du jour de la prospection. Contrôle : la même
+// entrée en séquence réserve bien le plafond du profil.
+func TestVeridianReserveDailyQuota_ManualMailNeverReserves(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	repo := &quotaTestRepository{outcomes: map[string]quotaTestOutcome{
+		domain.VeridianDailyQuotaKindProfile: {result: domain.VeridianDailyQuotaReservationResult{Reserved: false, Used: 50}},
+	}}
+	env.worker.messageHistoryRepo = repo
+	provider := &domain.EmailProvider{Kind: domain.EmailProviderKindSMTP, SMTP: &domain.SMTPSettings{Host: "smtp.gmail.com", Port: 587}}
+
+	sequence := veridianTestEntryFrom("seq", "lead@gmail.com", "account@gmail.com", domain.EmailQueuePayload{})
+	sequence.IntegrationID, sequence.SourceType = "gmail-profile", domain.EmailQueueSourceAutomation
+	_, _, blocked := env.worker.veridianReserveDailyQuota(veridianTestWorkspace(nil, 60), provider, sequence)
+	require.True(t, blocked, "contrôle : plafond du profil atteint, la séquence attend")
+
+	manual := veridianTestEntryFrom("main", "lead@gmail.com", "account@gmail.com", domain.EmailQueuePayload{})
+	manual.IntegrationID, manual.SourceType = "gmail-profile", domain.EmailQueueSourceMail
+	leases, delay, blocked := env.worker.veridianReserveDailyQuota(veridianTestWorkspace(nil, 60), provider, manual)
+	require.False(t, blocked, "le mail écrit à la main part quand même")
+	require.Zero(t, delay)
+	require.Empty(t, leases)
+	require.Len(t, repo.reserved, 1, "aucune réservation de plus pour le mail manuel")
+}

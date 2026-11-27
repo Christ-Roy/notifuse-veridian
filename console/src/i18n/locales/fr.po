@@ -7227,8 +7227,7 @@ msgstr "Il cesse de fonctionner immédiatement et ne peut pas être rouvert. Les
 msgid "It was sent before the unified inbox and its template could not be rebuilt. Headers and delivery status remain readable."
 msgstr "Il est parti avant la boîte unifiée et son modèle n'a pas pu être reconstitué. Les en-têtes et l'état de livraison restent lisibles."
 
-#: src/components/mail/veridian_mail_compose.tsx
-#: src/components/mail/veridian_mail_reply.tsx
+#: src/components/mail/veridian_mail_send_outcome.tsx
 msgid "It will appear in the conversation once the relay has accepted it."
 msgstr "Il apparaîtra dans la conversation dès que le relais l'aura accepté."
 
@@ -8680,6 +8679,10 @@ msgstr "Aucune entrée de la file ne correspond à ces filtres"
 #: src/components/send_queue/veridian_queue_labels.ts
 msgid "No reason"
 msgstr "Aucune raison"
+
+#: src/components/mail/veridian_mail_send_outcome.tsx
+msgid "No reason given by the relay."
+msgstr "Le relais n'a pas donné de raison."
 
 #: src/components/email_builder/ui/BackgroundInput.tsx
 msgid "No Repeat"
@@ -10275,12 +10278,12 @@ msgid "Queued emails will not be sent. In-flight sends will complete."
 msgstr "Les e-mails en file ne seront pas envoyés. Les envois en cours se termineront."
 
 #: src/components/mail/veridian_mail_compose.tsx
-msgid "Queued: your message will leave as soon as the sending limits allow it"
-msgstr "En file : votre message partira dès que les plafonds d'envoi le permettent"
+#~ msgid "Queued: your message will leave as soon as the sending limits allow it"
+#~ msgstr "En file : votre message partira dès que les plafonds d'envoi le permettent"
 
 #: src/components/mail/veridian_mail_reply.tsx
-msgid "Queued: your reply will leave as soon as the sending limits allow it"
-msgstr "En file : votre réponse partira dès que les plafonds d'envoi le permettent"
+#~ msgid "Queued: your reply will leave as soon as the sending limits allow it"
+#~ msgstr "En file : votre réponse partira dès que les plafonds d'envoi le permettent"
 
 #: src/components/send_queue/veridian_queue_labels.ts
 msgid "Quota denied"
@@ -11916,6 +11919,10 @@ msgstr "Domaines d'envoi"
 msgid "Sending emails..."
 msgstr "Envoi des emails..."
 
+#: src/components/mail/veridian_mail_send_outcome.tsx
+msgid "Sending in progress"
+msgstr "Envoi en cours"
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "Sending infrastructures"
@@ -12049,6 +12056,7 @@ msgstr "envoyé"
 #: src/components/mail/veridian_mail_header.tsx
 #: src/components/mail/veridian_mail_labels.ts
 #: src/components/mail/veridian_mail_list.tsx
+#: src/components/mail/veridian_mail_send_outcome.tsx
 #: src/components/messages/MessageHistoryTab.tsx
 #: src/components/messages/MessageHistoryTab.tsx
 #: src/components/messages/MessageHistoryTable.tsx
@@ -13473,6 +13481,14 @@ msgstr "le fournisseur refuse en bloc"
 msgid "The raw message was read truncated (size limit): the end of the mail may be missing."
 msgstr "Le message brut a été lu tronqué (limite de taille) : la fin du mail peut manquer."
 
+#: src/components/mail/veridian_mail_send_outcome.tsx
+msgid "The relay accepted it; it is in the conversation."
+msgstr "Le relais l'a accepté ; il est dans la conversation."
+
+#: src/components/mail/veridian_mail_send_outcome.tsx
+msgid "The relay refused the message"
+msgstr "Le relais a refusé le mail"
+
 #: src/pages/AnalyticsPage.tsx
 msgid "The requested workspace could not be found."
 msgstr "L'espace de travail demandé est introuvable."
@@ -13803,8 +13819,13 @@ msgstr "Ceci est votre éditeur d'email visuel. Cliquez sur n'importe quel élé
 
 #: src/components/mail/veridian_mail_compose.tsx
 #: src/components/mail/veridian_mail_reply.tsx
-msgid "This mail will leave with the same limits as the sequences."
-msgstr "Ce mail partira avec les mêmes plafonds que les séquences."
+msgid "This mail leaves right away, like from any mailbox."
+msgstr "Ce mail part tout de suite, comme depuis n'importe quelle messagerie."
+
+#: src/components/mail/veridian_mail_compose.tsx
+#: src/components/mail/veridian_mail_reply.tsx
+#~ msgid "This mail will leave with the same limits as the sequences."
+#~ msgstr "Ce mail partira avec les mêmes plafonds que les séquences."
 
 #: src/components/mail/veridian_mail_body.tsx
 msgid "This message has no content."

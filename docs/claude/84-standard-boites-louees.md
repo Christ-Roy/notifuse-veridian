@@ -131,6 +131,15 @@ Mesuré en prod (parcours Mail) : une réponse écrite depuis la boîte du profi
 sous une autre adresse. Le basculement de pool (`veridian_pool_failover.go`) retirait le profil réservé des candidats. Un mail de boîte
 (`EmailQueueSourceMail`, `mail.messages.send|reply`) est désormais épinglé à son profil : il part de cette adresse ou il attend.
 
+## Un mail écrit à la main part tout de suite (27/11/2026)
+Robert : « si on veut en envoyer un à la main, faut qu'il parte tout de suite », comme une vraie messagerie. Avant, il passait par
+les portes de la prospection (fenêtre, débits et plafonds par classe, chauffe, fusible, quota du jour) : tapé à 20 h, il attendait le
+lendemain. Désormais (`veridianIsManualMail`) : aucune porte commerciale ni réservation de quota, priorité transactionnelle (devant
+les séquences), départ au tick suivant (1 s). Restent : profil en pause et contact supprimé (refus à l'API), transport en panne,
+adresse morte (pré-filtre). L'API attend l'issue réelle 15 s au plus (`Store.SendOutcome`) : 200 `sent`, 200 `failed` avec la
+raison du relais, sinon 202 `sending`. Console : « Envoyé », « Le relais a refusé le mail » (raison), « Envoi en cours ». CLI :
+`mail:send|reply --yes` sort en 1 sur un refus. Il compte toujours dans l'historique (`message_history`), pas dans le quota du jour.
+
 ## Épreuve réelle du parcours en prod (26/11/2026)
 `python3 scripts/e2e/parcours-mail-prod.py --real-send` (org jetable du Hub ; `--reprendre <état.json>`, `--nettoyer-seulement`) : profils, import
 groupé, segment, modèle avec désinscription, séquence, envoi RÉEL entre deux adresses neuves à nous, réception par le MX Notifuse (en-têtes

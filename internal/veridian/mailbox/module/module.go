@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/Notifuse/notifuse/internal/domain"
 	"github.com/Notifuse/notifuse/internal/service/queue"
@@ -96,7 +97,7 @@ func wire(h platform.Host) error {
 	}
 	svc := &mailapi.Service{Store: store, Auth: mailapi.DomainAuthorizer{Auth: h.AuthService(), Standing: &standing.Store{DB: h.DB()}}, WS: repo}
 	if q := h.EmailQueueRepository(); q != nil {
-		svc.Sender = &mailapi.QueueSender{Queue: q, WS: repo, Store: store}
+		svc.Sender = &mailapi.QueueSender{Queue: q, WS: repo, Store: store, Wait: 15 * time.Second} // l'issue réelle, comme une messagerie
 	}
 	(&mailapi.Handler{Svc: svc, Log: log, RequireAuth: h.RequireAuth()}).RegisterRoutes(h.Mux())
 	return nil

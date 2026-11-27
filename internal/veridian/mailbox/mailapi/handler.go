@@ -620,7 +620,12 @@ func (h *Handler) sendOrReply(w http.ResponseWriter, r *http.Request, reply bool
 		h.fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusAccepted, res)
+	// 200 : l'issue est connue (parti, ou refusé par le relais avec sa raison) ; 202 : encore en cours.
+	code := http.StatusAccepted
+	if res != nil && res.Status != mailbox.SendStatePending {
+		code = http.StatusOK
+	}
+	writeJSON(w, code, res)
 }
 
 // RefusedError : l'envoi est refusé par une porte de la politique d'envoi (même vocabulaire que les séquences).

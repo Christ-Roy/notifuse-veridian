@@ -17,6 +17,10 @@ type veridianDailyQuotaLease struct {
 // earlier COUNT gate remains a cheap skip optimization, but only this database
 // reservation authorizes SMTP.
 func (w *EmailQueueWorker) veridianReserveDailyQuota(workspace *domain.Workspace, provider *domain.EmailProvider, entry *domain.EmailQueueEntry) ([]*veridianDailyQuotaLease, time.Duration, bool) {
+	// 27/11 : un mail écrit à la main ne consomme ni n'attend le quota du jour de la prospection.
+	if veridianIsManualMail(entry) {
+		return nil, 0, false
+	}
 	now := veridianNow().UTC()
 	class := entry.Payload.VeridianProviderClass
 	// freemail_fr (tag historique) est ré-éclaté en FAI avant de réserver (fiche 69, 22/10).

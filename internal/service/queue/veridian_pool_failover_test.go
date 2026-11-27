@@ -964,3 +964,39 @@ func TestVeridianBuildFailoverCandidates_ReservedOnlyForBulkWithoutCommercialPro
 		assert.NotEqual(t, "tx", c.IntegrationID)
 	}
 }
+
+// 27/11/2026 (Robert) : un mail écrit à la main depuis la boîte part tout de suite. La même entrée, en campagne, attend
+// la fenêtre fermée ; en mail manuel, elle est retenue sur-le-champ, toutes ses portes de prospection sautées.
+func TestVeridianSelectSendable_ManualMailIgnoresProspectingGates(t *testing.T) {
+	env := newVeridianThrottleTestEnv(t)
+	nord := veridianTestPoolIntegration("nord", "hello@nord-propre.example")
+	tomorrow := int((time.Now().UTC().Weekday() + 1) % 7)
+	nord.EmailProvider.VeridianSendingWindow = &domain.VeridianSendingWindow{Days: []int{tomorrow}, StartHour: 0, EndHour: 24, Timezone: "UTC"}
+	ws := veridianTestPoolWorkspace([]string{"nord"}, []domain.Integration{nord}, nil)
+	veridianExpectHealthyReputation(env, "ws-1", "nord-propre.example")
+
+	entry := func(source domain.EmailQueueSourceType) *domain.EmailQueueEntry {
+		e := veridianTestEntry("e-"+string(source), "client@ovh.fr", domain.EmailQueuePayload{})
+		e.SourceType = source
+		e.IntegrationID = "nord"
+		e.Payload.FromAddress = "hello@nord-propre.example"
+		return e
+	}
+
+	campaign := env.worker.veridianSelectSendableIntegration(ws, entry(domain.EmailQueueSourceBroadcast), ws.GetIntegrationByID("nord"))
+	require.Nil(t, campaign.Candidate, "contrôle : la fenêtre est bien fermée pour la prospection")
+	assert.Equal(t, domain.VeridianReasonWindowClosed, campaign.Reason)
+
+	manual := env.worker.veridianSelectSendableIntegration(ws, entry(domain.EmailQueueSourceMail), ws.GetIntegrationByID("nord"))
+	require.NotNil(t, manual.Candidate, "un mail écrit à la main part, fenêtre fermée ou non")
+	assert.Equal(t, "nord", manual.Candidate.IntegrationID)
+	require.Len(t, manual.Evaluations, 1)
+	for _, g := range manual.Evaluations[0].Gates {
+		assert.Equal(t, domain.VeridianVerdictSkipped, g.Verdict, g.Gate)
+	}
+
+	// La pause du profil, elle, tient toujours.
+	nord.EmailProvider.VeridianPaused = true
+	paused := veridianTestPoolWorkspace([]string{"nord"}, []domain.Integration{nord}, nil)
+	assert.Nil(t, env.worker.veridianSelectSendableIntegration(paused, entry(domain.EmailQueueSourceMail), paused.GetIntegrationByID("nord")).Candidate)
+}

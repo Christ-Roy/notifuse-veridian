@@ -191,9 +191,11 @@ export interface MailSendRequest {
 export interface MailSendResult {
   message_id: string
   queue_entry_id?: string
+  /** sent : accepté par le relais ; failed : refusé (error) ; sending : pas encore d'issue (27/11). */
   status: string
   thread_id?: string
   note?: string
+  error?: string
 }
 
 /** Détail d'un refus 409 (porte de la politique d'envoi). */
