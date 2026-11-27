@@ -10,6 +10,7 @@ import {
   message,
   Segmented,
   Tag,
+  Input,
   TableColumnType
 } from 'antd'
 import { useParams, useSearch, useNavigate } from '@tanstack/react-router'
@@ -35,6 +36,7 @@ import { templatesFamilyFromSearch } from '../layouts/veridian_sidebar_model'
 import { useFolderRows } from '../components/common/veridian_folder_state'
 import { folderTableColumns } from '../components/common/veridian_folder_columns'
 import type { TreeRow } from '../components/common/veridian_folder_rows'
+import { filterTemplatesByName } from '../components/templates/veridian_template_search'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -78,6 +80,8 @@ export function TemplatesPage() {
   // Add state for the test template modal
   const [testModalOpen, setTestModalOpen] = useState(false)
   const [templateToTest, setTemplateToTest] = useState<Template | null>(null)
+  // Recherche par nom (reprise amont 35.0) : filtre client sur la liste chargée
+  const [nameQuery, setNameQuery] = useState('')
 
   // Function to update search params
   const setSelectedCategory = (category: string) => {
@@ -159,6 +163,12 @@ export function TemplatesPage() {
   } = useFolderRows(templates, { workspaceId, kind: 'templates', canWrite: !!permissions?.templates?.write })
 
   const hasTemplates = !isLoading && templates && templates.length > 0
+  // Pendant une recherche, la liste passe à plat (les dossiers masquent les correspondances repliées)
+  const searching = nameQuery.trim() !== ''
+  const searchedTemplates = useMemo(
+    () => filterTemplatesByName(templates ?? [], nameQuery),
+    [templates, nameQuery]
+  )
 
   // Add function to handle testing a template
   const handleTestTemplate = (template: Template) => {
@@ -400,8 +410,8 @@ export function TemplatesPage() {
         )}
       </div>
 
-      {!isTransactionalFamily && (
-        <div className="mb-4">
+      <div className="flex justify-between items-center mb-4 gap-4 flex-wrap">
+        {!isTransactionalFamily ? (
           <Segmented
             options={categories}
             // Use selectedCategory from search params as value
@@ -409,8 +419,19 @@ export function TemplatesPage() {
             // Update search params on change
             onChange={(value) => setSelectedCategory(value as string)}
           />
-        </div>
-      )}
+        ) : (
+          <span />
+        )}
+        {hasTemplates && (
+          <Input.Search
+            allowClear
+            placeholder={t`Search by name`}
+            value={nameQuery}
+            onChange={(e) => setNameQuery(e.target.value)}
+            className="max-w-xs"
+          />
+        )}
+      </div>
 
       {!isLoading && (hasTemplates || nested) && <div>{folders.toolbar()}</div>}
       {folders.dialogs}
@@ -418,7 +439,7 @@ export function TemplatesPage() {
       {isLoading ? (
         <Table columns={columns} dataSource={[]} loading={true} rowKey="id" />
       ) : hasTemplates ? (
-        nested ? (
+        nested && !searching ? (
           // Avec dossiers, la pagination est désactivée : les dossiers structurent déjà la liste
           // (la pagination est côté client, tous les modèles sont chargés d'un coup).
           <Table<TreeRow<Template>>
@@ -432,9 +453,10 @@ export function TemplatesPage() {
         ) : (
           <Table
             columns={columns}
-            dataSource={templates}
+            dataSource={searching ? searchedTemplates : templates}
             rowKey="id"
             pagination={{ hideOnSinglePage: true }}
+            locale={{ emptyText: t`No templates match your search` }}
             className="border border-gray-200 rounded-md"
           />
         )

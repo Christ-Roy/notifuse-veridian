@@ -8771,6 +8771,10 @@ msgstr "No templates found for {0} category"
 msgid "No templates found for category \"{selectedCategory}\""
 msgstr "No templates found for category \"{selectedCategory}\""
 
+#: src/pages/TemplatesPage.tsx
+msgid "No templates match your search"
+msgstr "No templates match your search"
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "No throttle"
@@ -11372,6 +11376,10 @@ msgstr "Screen width below which mobile layout is activated. Common values: 480p
 #: src/components/veridian_a11y.ts
 msgid "Search"
 msgstr "Search"
+
+#: src/pages/TemplatesPage.tsx
+msgid "Search by name"
+msgstr "Search by name"
 
 #: src/components/mail/veridian_mail_filters.tsx
 msgid "Search messages"

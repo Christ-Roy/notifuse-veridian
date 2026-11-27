@@ -8771,6 +8771,10 @@ msgstr "{0}カテゴリのテンプレートが見つかりません"
 msgid "No templates found for category \"{selectedCategory}\""
 msgstr "カテゴリ「{selectedCategory}」のテンプレートが見つかりません"
 
+#: src/pages/TemplatesPage.tsx
+msgid "No templates match your search"
+msgstr ""
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "No throttle"
@@ -11371,6 +11375,10 @@ msgstr "モバイルレイアウトが有効になる画面幅。一般的な値
 #: src/components/common/veridian_folder_ui.tsx
 #: src/components/veridian_a11y.ts
 msgid "Search"
+msgstr ""
+
+#: src/pages/TemplatesPage.tsx
+msgid "Search by name"
 msgstr ""
 
 #: src/components/mail/veridian_mail_filters.tsx

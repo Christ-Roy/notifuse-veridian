@@ -8771,6 +8771,10 @@ msgstr "Aucun modèle trouvé pour la catégorie {0}"
 msgid "No templates found for category \"{selectedCategory}\""
 msgstr "Aucun modèle trouvé pour la catégorie \"{selectedCategory}\""
 
+#: src/pages/TemplatesPage.tsx
+msgid "No templates match your search"
+msgstr "Aucun modèle ne correspond à la recherche"
+
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "No throttle"
@@ -11372,6 +11376,10 @@ msgstr "Largeur d'écran en dessous de laquelle la disposition mobile est activ�
 #: src/components/veridian_a11y.ts
 msgid "Search"
 msgstr "Rechercher"
+
+#: src/pages/TemplatesPage.tsx
+msgid "Search by name"
+msgstr "Rechercher par nom"
 
 #: src/components/mail/veridian_mail_filters.tsx
 msgid "Search messages"
