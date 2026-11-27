@@ -6484,9 +6484,42 @@ def _setup_scoped_mode(args):
                 "NOTIFUSE_WORKSPACE (ecrit automatiquement par install.sh).")
 
 
+def _masquer_secrets_dans_erreurs_argparse():
+    """argparse recopie les arguments qu'il ne reconnaît pas (« unrecognized arguments:
+    --key <valeur> ») : le 27/11, deux agents ASD ont ainsi versé la clé Notifuse dans leur
+    transcription. Toute erreur d'analyse passe ici : la valeur suivant --key/--password/
+    --token/--secret (ou après « = ») et les clés des variables d'environnement connues sont
+    remplacées par ••• avant affichage. Couvre aussi les sous-parseurs (méthode de classe)."""
+    secrets = set()
+    argv = sys.argv[1:]
+    for i, a in enumerate(argv):
+        nom, egal, val = a.partition("=")
+        if re.match(r"^--?(key|api-key|password|pwd|token|secret)$", nom, re.I):
+            if egal and val:
+                secrets.add(val)
+            elif i + 1 < len(argv):
+                secrets.add(argv[i + 1])
+    for nom, val in os.environ.items():
+        if val and len(val) >= 12 and re.search(r"(KEY|TOKEN|SECRET|PASSWORD)", nom):
+            secrets.add(val)
+    secrets = sorted((s for s in secrets if len(s) >= 6), key=len, reverse=True)
+    origine = argparse.ArgumentParser.error
+    if getattr(origine, "_masque", False):
+        return
+
+    def error(self, message):
+        for s in secrets:
+            message = message.replace(s, "•••")
+        return origine(self, message)
+
+    error._masque = True
+    argparse.ArgumentParser.error = error
+
+
 def main(mode="admin", extra=None):
     """mode='admin' -> notifuse-admin (superset historique, super clé).
     mode='user'    -> notifuse (scopé à un seul workspace, sa propre api_key)."""
+    _masquer_secrets_dans_erreurs_argparse()
     args = build_parser(extra).parse_args()
 
     if mode == "user":
