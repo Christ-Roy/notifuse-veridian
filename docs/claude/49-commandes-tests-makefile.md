@@ -43,3 +43,6 @@ Depuis le 27/11 : `scripts/ci/prepush-console-tests.sh` joue par lourd (`npm ci`
 ceux qui importent un fichier `console/src` modifié (choix par `grep` des imports ; `vitest related` bute sur les `.po` faute du
 plugin Lingui dans `vitest.config.ts`). Prouvé : `installLinksLang` cassé exprès dans la source fait rouge (`&lang=en` attendu),
 la source saine passe (9 tests, ~30 s avec `npm ci`). Un fichier sans test lié passe ici : le mapping source↔test en juge.
+
+i18n au pre-push (27/11) : `check-i18n-extracted.sh` sans `console/node_modules` (le bastion) extrait par lourd et applique
+le diff des `.po` ici ; il exige aussi un fr.po sans `msgstr` vide. Avant, il sortait toujours « non abouti » sur le bastion.

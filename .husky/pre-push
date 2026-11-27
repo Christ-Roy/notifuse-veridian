@@ -3,8 +3,8 @@
 # scripts/ci/controles.tsv). La mécanique ne vit pas ici :
 # ~/nomad-veridian/standards/controles-portables/ — `gardes --help`.
 # Catalogues i18n a jour (une chaine t`...` non extraite casse la CI : check-console-build.sh etape 6).
-# Seulement si le push touche console/src ; un echec bloque, un « non abouti » (rc 2 : node_modules absent) previent sans bloquer.
-# En LOCAL, nice -n 19 : il réécrit les .po sur place pour qu'on les commite, ce qu'une copie lourd (sans .git) ne peut pas faire.
+# Seulement si le push touche console/src ; un echec bloque (catalogues obsoletes, msgstr FR vides), un « non abouti » previent.
+# Sans console/node_modules (le bastion), l'extraction part par lourd et son diff des .po revient appliqué ici (27/11).
 if ! git diff --quiet "@{upstream}" -- console/src 2>/dev/null || [ -n "$(git diff --name-only HEAD~1 -- console/src 2>/dev/null)" ]; then
   nice -n 19 scripts/ci/check-i18n-extracted.sh || { rc=$?; [ "$rc" = "2" ] || exit 1; }
 fi
