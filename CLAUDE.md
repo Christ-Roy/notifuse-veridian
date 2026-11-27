@@ -96,7 +96,7 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `72` commandes de vérité (relever plutôt que croire)
 - `49` commandes tests (Makefile, PostgreSQL `testpg`)
 - `41` sync upstream
-- `42` déploiement GitOps Nomad · `101` **deux exemplaires, un seul leader** (envoi, IMAP, webhooks, certificat)
+- `42` déploiement GitOps Nomad · `101` **deux exemplaires, un seul leader** ; routes Traefik : nom neuf, jamais modifiées
 - `43` tests E2E Veridian
 
 **Sécurité & API**
@@ -132,17 +132,9 @@ Commandes de vérité (cluster, dépôt, secrets) : fiche `72`.
 - `04` plafond journalier d'envoi
 - `08` rates + caps par infra d'envoi
 - `19` classification destinataire par MX réel
-- `21` priorisation follow-up sous contrainte de capacité
-- `22` multi-SMTP round-robin par provider destinataire
-- `23` fenêtre d'envoi — horaires ouvrables
-- `25` jitter temporel du throttle par classe
-- `27` exclusion de classes de provider destinataire
-- `28` cap journalier par SENDER émetteur — warmup IP
-- `29` warmup progressif — rampe auto
-- `30` FIX P1 — warmup = cap total par infra
-- `31` V55 — réservation atomique des quotas journaliers
-- `32` V56 — profils d'envoi multi-intégrations
-- `38` cap journalier par classe keyé par infra émettrice
+- `21` follow-up prioritaire · `22` multi-SMTP round-robin · `23` fenêtre d'envoi · `25` jitter du throttle
+- `27` exclusion de classes · `28` cap par SENDER · `29`-`30` warmup (rampe, cap total par infra)
+- `31` V55 réservation atomique des quotas · `32` V56 profils multi-intégrations · `38` cap par classe et infra
 
 **Cold outbound — contenu & tracking**
 - `05` open tracking — pixel par classe
