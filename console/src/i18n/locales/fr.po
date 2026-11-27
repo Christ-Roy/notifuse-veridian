@@ -2537,6 +2537,10 @@ msgstr "clics"
 msgid "Clicks"
 msgstr "Clics"
 
+#: src/components/broadcasts/veridian_liens_rapport.tsx
+msgid "Clicks by link"
+msgstr "Clics par lien"
+
 #: src/components/templates/TemplateSelectorInput.tsx
 #: src/components/templates/TemplateSelectorInput.tsx
 msgid "Clone"
@@ -3236,6 +3240,10 @@ msgstr "Impossible de charger les écarts"
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 msgid "Could not load the entry"
 msgstr "Impossible de charger l'entrée"
+
+#: src/components/broadcasts/veridian_liens_rapport.tsx
+msgid "Could not load the link clicks"
+msgstr "Impossible de charger les clics par lien"
 
 #: src/pages/SendingProfilesPage.tsx
 msgid "Could not load the profiles"
@@ -7560,6 +7568,7 @@ msgstr "Hauteur de ligne"
 msgid "Line Through"
 msgstr "Barré"
 
+#: src/components/broadcasts/veridian_liens_rapport.tsx
 #: src/components/email_builder/blocks/MjImageBlock.tsx
 msgid "Link"
 msgstr "Lien"
@@ -8571,6 +8580,10 @@ msgstr "Aucun élément sélectionné"
 #: src/components/sending_profiles/veridian_profile_labels.ts
 msgid "No limit"
 msgstr "Aucune limite"
+
+#: src/components/broadcasts/veridian_liens_rapport.tsx
+msgid "No link clicked yet"
+msgstr "Aucun lien cliqué pour le moment"
 
 #: src/components/sending_profiles/veridian_profile_card.tsx
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx
@@ -14200,6 +14213,10 @@ msgstr "Total"
 msgid "Total attachments size exceeds 10MB limit"
 msgstr "La taille totale des pièces jointes dépasse la limite de 10 Mo"
 
+#: src/components/broadcasts/veridian_liens_rapport.tsx
+msgid "Total clicks"
+msgstr "Clics totaux"
+
 #~ msgid "Total sent by this Gmail profile across every recipient provider. 30/day is the recommended starting point; a declared Google Workspace account can go up to {maxCap}/day once warmed up."
 #~ msgstr "Total envoyé par ce profil Gmail, tous fournisseurs destinataires confondus. 30/jour est le point de départ recommandé ; un compte Google Workspace déclaré peut monter jusqu'à {maxCap}/jour une fois chauffé."
 
@@ -14445,6 +14462,10 @@ msgstr "Annuler (Ctrl+Z)"
 #: src/components/veridian_connect_ai.tsx
 #~ msgid "Une seule connexion Veridian : votre IA accède à Mail et à vos autres apps Veridian."
 #~ msgstr "Une seule connexion Veridian : votre IA accède à Mail et à vos autres apps Veridian."
+
+#: src/components/broadcasts/veridian_liens_rapport.tsx
+msgid "Unique clickers"
+msgstr "Cliqueurs uniques"
 
 #: src/components/contacts/SegmentsFilter.tsx
 #: src/components/timeline/ContactTimeline.tsx

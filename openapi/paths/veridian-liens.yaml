@@ -1,0 +1,49 @@
+/api/veridian/liens.rapport:
+  get:
+    summary: Clics par lien d'un envoi (Veridian, reprise amont 35.0)
+    description: |
+      Pour un envoi (campagne), les clics totaux et les cliqueurs uniques par URL de destination. Un cliqueur unique est
+      un message distinct ayant cliqué l'URL. Les paramètres UTM restent dans l'URL : ce sont eux qui distinguent deux
+      liens. Les clics sont enregistrés à la redirection, à partir de la date de mise en service : un envoi antérieur
+      n'a pas de détail. Liste vide si aucun clic.
+
+      Auth = JWT ou clé d'API de l'espace. Requiert `messages:read`.
+    operationId: veridianLiensRapport
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: workspace_id
+        in: query
+        required: true
+        schema: { type: string }
+      - name: broadcast_id
+        in: query
+        required: true
+        description: Identifiant de l'envoi (campagne)
+        schema: { type: string }
+    responses:
+      '200':
+        description: Une ligne par URL cliquée, la plus cliquée d'abord
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lignes]
+              properties:
+                lignes:
+                  type: array
+                  items:
+                    type: object
+                    required: [url, clics, cliqueurs]
+                    properties:
+                      url: { type: string }
+                      clics: { type: integer, description: Clics totaux sur cette URL }
+                      cliqueurs: { type: integer, description: Messages distincts ayant cliqué cette URL }
+      '400':
+        description: workspace_id ou broadcast_id absent
+      '401':
+        description: Non authentifié
+      '403':
+        description: Droit messages:read absent
+      '500':
+        description: Lecture impossible

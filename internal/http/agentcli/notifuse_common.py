@@ -399,6 +399,8 @@ WORKSPACE_COMMANDS = frozenset({
     "policy:suggest-enrollment",
     # Fiche 85 (24/11/2026) : import en masse dédoublonné, réservoirs, activation par lots.
     "contacts:intake", "contacts:state", "reservoir:status", "reservoir:lists", "reservoir:activate",
+    # Reprise amont 35.0 (27/11/2026) : clics par lien d'un envoi, en lecture (messages:read).
+    "liens:rapport",
     # Lot 1 (10/10/2026) : pourquoi un mail n'est pas parti. queue:explain et logs:decisions en
     # lecture (automations:read) ; queue:recompute en écriture (automations:write, --yes requis).
     "queue:explain", "logs:decisions", "queue:recompute", "queue:entries", "queue:cancel",
@@ -3136,6 +3138,12 @@ def cmd_contacts_state(a):
     out(*call_jwt(a.env, "POST", "/api/veridian/contacts.state", apikey_for(a.env, a.workspace), body={"workspace_id": a.workspace, "emails": _csv_list(a.emails)}))
 
 
+def cmd_liens_rapport(a):
+    """Clics par lien d'un envoi : clics totaux et cliqueurs uniques par URL (GET /api/veridian/liens.rapport)."""
+    params = {"workspace_id": a.workspace, "broadcast_id": a.broadcast}
+    out(*call_jwt(a.env, "GET", "/api/veridian/liens.rapport", apikey_for(a.env, a.workspace), params=params))
+
+
 def cmd_reservoir_lists(a):
     out(*call_jwt(a.env, "GET", "/api/veridian/reservoir.lists", apikey_for(a.env, a.workspace), params={"workspace_id": a.workspace}))
 
@@ -5588,6 +5596,11 @@ def build_parser(extra=None):
     sp = sub.add_parser("reservoir:lists", help="listes où verser un lot, et celles qui démarrent une séquence active (lists:read)")
     sp.add_argument("workspace", nargs="?", default=None)
     sp.set_defaults(func=cmd_reservoir_lists, _routes=["/api/veridian/reservoir.lists"])
+
+    sp = sub.add_parser("liens:rapport", help="clics par lien d'un envoi : clics totaux et cliqueurs uniques par URL (messages:read)")
+    sp.add_argument("workspace", nargs="?", default=None)
+    sp.add_argument("--broadcast", required=True, help="identifiant de l'envoi (campagne)")
+    sp.set_defaults(func=cmd_liens_rapport, _routes=["/api/veridian/liens.rapport"])
 
     sp = sub.add_parser("reservoir:activate", help="fait entrer un lot de contacts dans une séquence active (ENVOIE, dans les plafonds)")
     sp.add_argument("workspace", nargs="?", default=None)

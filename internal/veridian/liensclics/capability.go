@@ -46,5 +46,8 @@ func wire(h platform.Host) error {
 			log.Warn(err.Error())
 		}
 	})
+	if h.Mux() != nil {
+		(&Handler{Svc: &Rapport{Auth: h.AuthService(), Bases: ws}, RequireAuth: h.RequireAuth()}).RegisterRoutes(h.Mux())
+	}
 	return nil
 }

@@ -2537,6 +2537,10 @@ msgstr "clicks"
 msgid "Clicks"
 msgstr "Clicks"
 
+#: src/components/broadcasts/veridian_liens_rapport.tsx
+msgid "Clicks by link"
+msgstr "Clicks by link"
+
 #: src/components/templates/TemplateSelectorInput.tsx
 #: src/components/templates/TemplateSelectorInput.tsx
 msgid "Clone"
@@ -3236,6 +3240,10 @@ msgstr "Could not load the discrepancies"
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 msgid "Could not load the entry"
 msgstr "Could not load the entry"
+
+#: src/components/broadcasts/veridian_liens_rapport.tsx
+msgid "Could not load the link clicks"
+msgstr "Could not load the link clicks"
 
 #: src/pages/SendingProfilesPage.tsx
 msgid "Could not load the profiles"
@@ -7560,6 +7568,7 @@ msgstr "Line Height"
 msgid "Line Through"
 msgstr "Line Through"
 
+#: src/components/broadcasts/veridian_liens_rapport.tsx
 #: src/components/email_builder/blocks/MjImageBlock.tsx
 msgid "Link"
 msgstr "Link"
@@ -8571,6 +8580,10 @@ msgstr "No items selected"
 #: src/components/sending_profiles/veridian_profile_labels.ts
 msgid "No limit"
 msgstr "No limit"
+
+#: src/components/broadcasts/veridian_liens_rapport.tsx
+msgid "No link clicked yet"
+msgstr "No link clicked yet"
 
 #: src/components/sending_profiles/veridian_profile_card.tsx
 #: src/components/sending_profiles/veridian_profile_edit_drawer.tsx
@@ -14200,6 +14213,10 @@ msgstr "Total"
 msgid "Total attachments size exceeds 10MB limit"
 msgstr "Total attachments size exceeds 10MB limit"
 
+#: src/components/broadcasts/veridian_liens_rapport.tsx
+msgid "Total clicks"
+msgstr "Total clicks"
+
 #~ msgid "Total sent by this Gmail profile across every recipient provider. 30/day is the recommended starting point; a declared Google Workspace account can go up to {maxCap}/day once warmed up."
 #~ msgstr "Total sent by this Gmail profile across every recipient provider. 30/day is the recommended starting point; a declared Google Workspace account can go up to {maxCap}/day once warmed up."
 
@@ -14445,6 +14462,10 @@ msgstr "Undo (Ctrl+Z)"
 #: src/components/veridian_connect_ai.tsx
 #~ msgid "Une seule connexion Veridian : votre IA accède à Mail et à vos autres apps Veridian."
 #~ msgstr "Une seule connexion Veridian : votre IA accède à Mail et à vos autres apps Veridian."
+
+#: src/components/broadcasts/veridian_liens_rapport.tsx
+msgid "Unique clickers"
+msgstr "Unique clickers"
 
 #: src/components/contacts/SegmentsFilter.tsx
 #: src/components/timeline/ContactTimeline.tsx

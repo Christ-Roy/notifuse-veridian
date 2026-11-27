@@ -2537,6 +2537,10 @@ msgstr "Clics"
 msgid "Clicks"
 msgstr "Clics"
 
+#: src/components/broadcasts/veridian_liens_rapport.tsx
+msgid "Clicks by link"
+msgstr ""
+
 #: src/components/templates/TemplateSelectorInput.tsx
 #: src/components/templates/TemplateSelectorInput.tsx
 msgid "Clone"
@@ -3235,6 +3239,10 @@ msgstr ""
 
 #: src/components/send_queue/veridian_queue_entry_drawer.tsx
 msgid "Could not load the entry"
+msgstr ""
+
+#: src/components/broadcasts/veridian_liens_rapport.tsx
+msgid "Could not load the link clicks"
 msgstr ""
 
 #: src/pages/SendingProfilesPage.tsx
@@ -7560,6 +7568,7 @@ msgstr "Alçada de línia"
 msgid "Line Through"
 msgstr "Ratllat"
 
+#: src/components/broadcasts/veridian_liens_rapport.tsx
 #: src/components/email_builder/blocks/MjImageBlock.tsx
 msgid "Link"
 msgstr "Enllaç"
@@ -8570,6 +8579,10 @@ msgstr "No s'han seleccionat elements"
 #: src/components/sending_profiles/veridian_profile_labels.ts
 #: src/components/sending_profiles/veridian_profile_labels.ts
 msgid "No limit"
+msgstr ""
+
+#: src/components/broadcasts/veridian_liens_rapport.tsx
+msgid "No link clicked yet"
 msgstr ""
 
 #: src/components/sending_profiles/veridian_profile_card.tsx
@@ -14200,6 +14213,10 @@ msgstr "Total"
 msgid "Total attachments size exceeds 10MB limit"
 msgstr "La mida total dels fitxers adjunts supera el límit de 10MB"
 
+#: src/components/broadcasts/veridian_liens_rapport.tsx
+msgid "Total clicks"
+msgstr ""
+
 #~ msgid "Total sent by this Gmail profile across every recipient provider. 30/day is the recommended starting point; a declared Google Workspace account can go up to {maxCap}/day once warmed up."
 #~ msgstr ""
 
@@ -14445,6 +14462,10 @@ msgstr "Desfer (Ctrl+Z)"
 #: src/components/veridian_connect_ai.tsx
 #~ msgid "Une seule connexion Veridian : votre IA accède à Mail et à vos autres apps Veridian."
 #~ msgstr ""
+
+#: src/components/broadcasts/veridian_liens_rapport.tsx
+msgid "Unique clickers"
+msgstr ""
 
 #: src/components/contacts/SegmentsFilter.tsx
 #: src/components/timeline/ContactTimeline.tsx

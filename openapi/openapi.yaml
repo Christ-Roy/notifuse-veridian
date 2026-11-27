@@ -119,6 +119,8 @@ paths:
     $ref: './paths/veridian-reservoir.yaml#/~1api~1veridian~1reservoir.summary'
   /api/veridian/reservoir.lists:
     $ref: './paths/veridian-reservoir.yaml#/~1api~1veridian~1reservoir.lists'
+  /api/veridian/liens.rapport:
+    $ref: './paths/veridian-liens.yaml#/~1api~1veridian~1liens.rapport'
   /api/veridian/reservoir.activate:
     $ref: './paths/veridian-reservoir.yaml#/~1api~1veridian~1reservoir.activate'
   /api/veridian/policy.suggest-enrollment:

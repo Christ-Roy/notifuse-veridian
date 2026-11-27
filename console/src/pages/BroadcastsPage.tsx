@@ -55,6 +55,7 @@ import { SendOrScheduleModal } from '../components/broadcasts/SendOrScheduleModa
 import { useAuth, useWorkspacePermissions } from '../contexts/AuthContext'
 import TemplatePreviewDrawer from '../components/templates/TemplatePreviewDrawer'
 import { BroadcastStats, ProgressStats } from '../components/broadcasts/BroadcastStats'
+import { VeridianLiensRapport } from '../components/broadcasts/veridian_liens_rapport'
 import { SendingProgress } from '../components/broadcasts/SendingProgress'
 import { Integration, List, Sender } from '../services/api/types'
 import SendTemplateModal from '../components/templates/SendTemplateModal'
@@ -644,6 +645,7 @@ const BroadcastCard: React.FC<BroadcastCardProps> = ({
           broadcastStatus={broadcast.status}
           onStatsUpdate={setProgressStats}
         />
+        <VeridianLiensRapport workspaceId={workspaceId} broadcastId={broadcast.id} />
       </div>
 
       <div className={`bg-gradient-to-br from-gray-50 to-violet-50 border-t border-gray-200`}>
