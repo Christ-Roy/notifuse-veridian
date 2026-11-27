@@ -8004,6 +8004,10 @@ msgid "Me (closes when I leave the workspace)"
 msgstr "Yo (se cierra cuando dejo el espacio de trabajo)"
 
 #: src/components/settings/WorkspaceMembers.tsx
+msgid "Member"
+msgstr ""
+
+#: src/components/settings/WorkspaceMembers.tsx
 msgid "Member removed successfully"
 msgstr "Miembro eliminado exitosamente"
 
@@ -9411,6 +9415,10 @@ msgstr ""
 
 #: src/components/settings/veridian_cold_outreach_settings.tsx
 msgid "OVH (MX-resolved)"
+msgstr ""
+
+#: src/components/settings/WorkspaceMembers.tsx
+msgid "Owner"
 msgstr ""
 
 #: src/components/email_builder/blocks/MjColumnBlock.tsx
