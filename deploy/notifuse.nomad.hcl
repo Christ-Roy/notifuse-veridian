@@ -174,19 +174,21 @@ job "notifuse" {
         "traefik.enable=true",
         "traefik.http.routers.notifuse.rule=Host(`notifuse-lab.veridian.site`)",
         "traefik.http.routers.notifuse.entrypoints=web",
-        "traefik.http.routers.notifuse.middlewares=internal-only@nomad",
+        "traefik.http.routers.notifuse.middlewares=internal-only@nomad,retry-idempotent@file",
         "traefik.http.routers.notifusesec.rule=Host(`notifuse-lab.veridian.site`)",
         "traefik.http.routers.notifusesec.entrypoints=websecure",
-        "traefik.http.routers.notifusesec.middlewares=internal-only@nomad",
+        "traefik.http.routers.notifusesec.middlewares=internal-only@nomad,retry-idempotent@file",
         "traefik.http.routers.notifusesec.tls=true",
         "traefik.http.routers.notifuseprod.rule=Host(`notifuse.app.veridian.site`)",
         "traefik.http.routers.notifuseprod.entrypoints=websecure",
         "traefik.http.routers.notifuseprod.tls=true",
         "traefik.http.routers.notifuseprod.tls.certresolver=letsencrypt",
+        # Rejeu des GET/HEAD sur 502/503/504 (retry-idempotent@file, posé par l'infra sur les ingress), EN DERNIER de la chaîne.
+        "traefik.http.routers.notifuseprod.middlewares=retry-idempotent@file",
         # Controle actif de Traefik : une instance qui ne repond plus sort du lot en 2 s, sans attendre le catalogue.
         "traefik.http.services.notifuse.loadbalancer.healthcheck.path=/healthz",
         "traefik.http.services.notifuse.loadbalancer.healthcheck.interval=2s",
-        "traefik.http.services.notifuse.loadbalancer.healthcheck.timeout=1s",
+        "traefik.http.services.notifuse.loadbalancer.healthcheck.timeout=2s",
       ]
       check {
         type     = "http"
