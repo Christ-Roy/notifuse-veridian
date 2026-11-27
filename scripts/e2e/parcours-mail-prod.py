@@ -26,6 +26,9 @@ ap.add_argument("--ouvrir", action="store_true", help="ouvre le mail reçu (pixe
 ap.add_argument("--autre-nom", help="réponse humaine de plus depuis une adresse neuve (parcours-autre-<stamp>@), absente du CRM, sous ce nom affiché")
 ap.add_argument("--stamp", help="suffixe imposé des adresses d'épreuve (ex. lot2611, quand le Hub a déjà posé la personne au CRM)")
 ap.add_argument("--transactionnel", action="store_true", help="rejeu d'un stamp dont la boîte s'est désinscrite (garde « desinscrit » du réservoir) : envoi par une notification transactionnelle, créée puis supprimée par l'API")
+ap.add_argument("--objet", help="avec --transactionnel : objet explicite du mail (nouveau modèle à cet objet)")
+ap.add_argument("--trois-nom", help="UNE réponse humaine de plus depuis parcours-trois-<stamp>@ (adresse neuve), signée sous ce nom")
+ap.add_argument("--court", action="store_true", help="envoi + réception + réponses --autre-nom/--trois-nom seulement (ni ouverture, ni réponse de la boîte, ni désinscription)")
 a = ap.parse_args()
 WS, HUB_TENANT = a.ws or WS, a.hub_tenant or HUB_TENANT
 if not re.fullmatch(r"[a-z0-9]{1,40}", WS) or (a.stamp and not re.fullmatch(r"[a-z0-9]{1,20}", a.stamp)):
@@ -37,6 +40,7 @@ S = E["stamp"]
 # Envoi par le relais AGENCE (le relais nord se croit destinataire de messagerie-nord-776.fr et livre en local, mesuré le 26/11) :
 # l'expéditeur est sur agence-veridian.fr (DKIM aligné), la boîte et l'adresse de retour sur le domaine servi par le MX Notifuse.
 ENVOI, BOITE, RETOUR = f"parcours-envoi-{S}@agence-veridian.fr", f"parcours-boite-{S}@{DOM}", f"parcours-retour-{S}@{DOM}"
+TROIS = f"parcours-trois-{S}@{DOM}"
 AUTRE = f"parcours-autre-{S}@{DOM}"  # --autre-nom : une personne absente du CRM, que la réponse crée
 ecarts = []
 
@@ -97,18 +101,20 @@ def nettoyer():
         if aid:
             print("pause séquence :", api("POST", "/api/automations.pause", {"workspace_id": WS, "automation_id": aid}, check=False).get("_rc", "ok"))
             print("suppression séquence :", api("POST", "/api/automations.delete", {"workspace_id": WS, "automation_id": aid}, check=False).get("_rc", "ok"))
+    if E.get("template2"):
+        print("suppression modèle d'objet :", api("POST", "/api/templates.delete", {"workspace_id": WS, "id": E["template2"]}, check=False).get("_rc", "ok"))
     if E.get("notif"):
         print("suppression notification transactionnelle :", api("POST", "/api/transactional.delete", {"workspace_id": WS, "id": E["notif"]}, check=False).get("_rc", "ok"))
     w = api("GET", "/api/workspaces.get", id=WS)["workspace"]
     s = w["settings"]
     for k in ("marketing_email_provider_id", "transactional_email_provider_id"):
-        if s.get(k) in (E.get("integ_envoi"), E.get("integ_boite"), E.get("integ_autre")):
+        if s.get(k) in (E.get("integ_envoi"), E.get("integ_boite"), E.get("integ_autre"), E.get("integ_trois")):
             s[k] = ""
     api("POST", "/api/workspaces.update", {"id": WS, "name": w["name"], "settings": s}, check=False)
-    for k in ("integ_envoi", "integ_boite", "integ_autre"):
+    for k in ("integ_envoi", "integ_boite", "integ_autre", "integ_trois"):
         if E.get(k):
             print("suppression profil", k, ":", api("POST", "/api/workspaces.deleteIntegration", {"workspace_id": WS, "integration_id": E[k]}, check=False).get("_rc", "ok"))
-    left = [i for i in api("GET", "/api/workspaces.get", id=WS)["workspace"].get("integrations") or [] if i["id"] in (E.get("integ_envoi"), E.get("integ_boite"), E.get("integ_autre"))]
+    left = [i for i in api("GET", "/api/workspaces.get", id=WS)["workspace"].get("integrations") or [] if i["id"] in (E.get("integ_envoi"), E.get("integ_boite"), E.get("integ_autre"), E.get("integ_trois"))]
     preuve("nettoyage : plus aucun profil d'épreuve", not left, f"{len(left)} restant(s)")
 
 
@@ -129,6 +135,8 @@ try:
         profils = [("integ_envoi", [("s1", ENVOI, True), ("s2", RETOUR, False)], f"parcours-envoi-{S}"), ("integ_boite", [("s1", BOITE, True)], f"parcours-boite-{S}")]
         if a.autre_nom:
             profils.append(("integ_autre", [("s1", AUTRE, True)], f"parcours-autre-{S}"))
+        if a.trois_nom:
+            profils.append(("integ_trois", [("s1", TROIS, True)], f"parcours-trois-{S}"))
         for key, senders, nom in profils:
             r = api("POST", "/api/workspaces.createIntegration", {"workspace_id": WS, "name": nom, "type": "email", "provider": {
                 "kind": "smtp", "smtp": {"host": c.get("SMTP_AGENCE_HOST", "smtp.agence-veridian.fr"), "port": int(c.get("SMTP_AGENCE_PORT", "587")),
@@ -136,7 +144,7 @@ try:
                 "rate_limit_per_minute": 10, "veridian_profile_daily_cap": 3,
                 "veridian_sending_window": {"start_hour": 0, "end_hour": 24, "timezone": "UTC"},
                 "veridian_provider_class_rates": {k: 10 for k in CLASSES}, "veridian_provider_class_daily_cap": {k: 3 for k in CLASSES},
-                "senders": [{"id": i, "email": ad, "name": a.autre_nom if key == "integ_autre" else "Veridian Parcours", "is_default": d} for i, ad, d in senders]}})
+                "senders": [{"id": i, "email": ad, "name": a.autre_nom if key == "integ_autre" else a.trois_nom if key == "integ_trois" else "Veridian Parcours", "is_default": d} for i, ad, d in senders]}})
             E[key] = r["integration_id"]; save()
         w = api("GET", "/api/workspaces.get", id=WS)["workspace"]
         w["settings"]["marketing_email_provider_id"] = E["integ_envoi"]
@@ -215,6 +223,12 @@ try:
             w = api("GET", "/api/workspaces.get", id=WS)["workspace"]
             w["settings"]["transactional_email_provider_id"] = E["integ_envoi"]
             api("POST", "/api/workspaces.update", {"id": WS, "name": w["name"], "settings": w["settings"]})
+            if a.objet:
+                tpl2 = f"ptplobjet{S}{str(int(time.time()))[-6:]}"
+                t = api("GET", "/api/templates.get", id=E["template"])["template"]
+                api("POST", "/api/templates.create", {"workspace_id": WS, "id": tpl2, "name": f"Parcours {S} objet", "channel": "email", "category": "transactional",
+                    "email": {"sender_id": "s1", "subject": a.objet, "visual_editor_tree": t["email"]["visual_editor_tree"]}})
+                E["template2"] = tpl2; E["template"] = tpl2
             api("POST", "/api/transactional.create", {"workspace_id": WS, "notification": {"id": notif, "name": f"Parcours {S} transactionnel",
                 "channels": {"email": {"template_id": E["template"]}}, "tracking_settings": {"enable_tracking": True}}})
             E["notif"] = notif; save()
@@ -269,7 +283,7 @@ try:
         print("Authentication-Results :", ar or "absent (le récepteur ne l'écrit pas encore : lot D1)")
 
     # 5 bis. --ouvrir : le lecteur ouvre le mail (pixel) et clique son lien suivi (activité Mail vers le Hub, fiche 98).
-    if a.ouvrir and not E.get("ouvert"):
+    if a.ouvrir and not a.court and not E.get("ouvert"):
         raw = subprocess.run(["notifuse-admin", "--env", "prod", "mail:raw", WS, "--id", str(E["recu"])], capture_output=True, timeout=120).stdout
         import email as _email
         from email import policy as _policy
@@ -291,6 +305,8 @@ try:
         E["ouvert"] = {"a": time.strftime("%H:%M:%SZ", time.gmtime()), **res}; save()
         preuve("ouverture et clic du lecteur", res.get("ouverture") == 200 and res.get("clic") not in (None, "absent"), str(E["ouvert"]))
 
+    if a.court:
+        E["reponse"] = E.get("reponse") or "saute (--court)"; E["reponse_recue"] = E.get("reponse_recue") or "saute (--court)"; save()
     # 6. Réponse humaine depuis la boîte d'épreuve, retour au MX, arrêt de la séquence.
     if not E.get("reponse"):
         r = cli("mail:reply", WS, "--id", str(E["recu"]), "--profile", E["integ_boite"], "--to", RETOUR,
@@ -329,8 +345,24 @@ try:
         E["autre_recue"] = rr and {k: rr.get(k) for k in ("id", "from", "from_name", "received_at")}; save()
         preuve("réponse de l'adresse absente du CRM reçue, nom affiché", bool(rr) and (rr or {}).get("from_name") == a.autre_nom, str(E["autre_recue"]))
 
+    # 6 ter. --trois-nom : UNE réponse humaine depuis une adresse neuve, ligne de livraison et from_name relevés à l'heure près.
+    if a.trois_nom and E.get("integ_trois") and not E.get("trois_recue"):
+        if not E.get("trois_reponse"):
+            E["trois_envoyee_a"] = time.strftime("%H:%M:%SZ", time.gmtime())
+            r = cli("mail:reply", WS, "--id", str(E["recu"]), "--profile", E["integ_trois"], "--to", RETOUR,
+                    "--text", f"Bonjour, je suis une troisième personne ({S}). Rappelez-moi.", "--yes", "--json", check=False)
+            E["trois_reponse"] = r; save()
+            preuve("réponse depuis la troisième adresse envoyée", r.get("_rc") in (None, 0) and "error" not in json.dumps(r).lower(), json.dumps(r, ensure_ascii=False)[:200])
+        t0, rr = time.time(), None
+        while time.time() - t0 < 900 and not rr:
+            time.sleep(20)
+            l = api("GET", "/api/veridian/mail.messages.list", check=False, workspace_id=WS, direction="in", kind="reply_human", limit=20)
+            rr = next((m for m in (l.get("messages") if isinstance(l, dict) else l) or [] if TROIS in json.dumps(m).lower() and str(m.get("id")) not in E.get("avant", [])), None)
+        E["trois_recue"] = rr and {k: rr.get(k) for k in ("id", "from", "from_name", "received_at")}; save()
+        preuve("réponse de la troisième adresse reçue", bool(rr), str(E["trois_recue"]))
+
     # 7. Désinscription en un clic depuis l'en-tête du mail reçu.
-    if a.transactionnel and not E.get("desinscrit"):
+    if (a.transactionnel or a.court) and not E.get("desinscrit"):
         E["desinscrit"] = {"saute": "mail transactionnel, pas de désinscription de liste"}; save()
     if not E.get("desinscrit"):
         url = next((u for u in re.findall(r"<(https?://[^>]+)>", E["entetes"].get("list_unsubscribe") or "")), None)

@@ -131,3 +131,10 @@ L'objet rendu est désormais consigné pour TOUS les envois : transactionnel et 
 une ligne dans `email_service.go`) et toutes les sources de la file (`queue/veridian_sent_subject.go`, une ligne dans `worker.go`).
 Avant, seules les automations l'avaient : la ligne du CRM d'un envoi transactionnel s'affichait « Untitled ». Dans `message.received`
 (webhook), `data.email` est le contact RATTACHÉ, `data.from` l'expéditeur réel ; dans un lot, `from_email`.
+
+### Épreuve de l'objet et du nom (27/11/2026, prod 918b6951, `--transactionnel --court --objet --trois-nom`)
+
+Envoi 01:55:45Z (message `8d5f4405-d75e-4afd-a668-842bd62547e1`) : `message_data.metadata.veridian_subject` = « Épreuve objet lot2611 » (lu par `messages:list`).
+Réponse de `parcours-trois-lot2611@` « Camille Épreuve-Deux » reçue 01:56:29Z, message `2189918e-9981-4a88-9f01-30ff574057bb` (`mail:get` : « De : Camille Épreuve-Deux »).
+Lots : 01:55:58Z `d60f8474-991e-430d-81d7-b0735ac3053b` (1 événement), 01:56:48Z `67df2f92-d930-4370-a7f7-994313d3428a` (2), Hub 200 acceptes 1 et 2, doublons 0, ignores 0.
+Métriques (alloc 32c63e00) : `events_total{accepte}` 0 puis 3, `lots_total{accepte}` 0 puis 2. Le corps des lots reste illisible (pas de SQL) : le `from_name` livré au Hub n'est pas vu ici.
